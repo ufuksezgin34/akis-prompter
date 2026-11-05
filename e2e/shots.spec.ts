@@ -1,0 +1,22 @@
+import { test } from '@playwright/test';
+import { freshStart } from './helpers';
+const dir = process.env.SHOT_DIR ?? 'test-results/shots';
+test.skip(!process.env.SHOT_DIR, 'yalnızca ekran görüntüsü için');
+test('ekran görüntüleri', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await freshStart(page);
+  await page.getByRole('button', { name: 'Örnek metinleri ekle' }).click();
+  await page.screenshot({ path: `${dir}/library.png` });
+  await page.getByRole('button', { name: 'Örnek — 30 saniyelik Reels' }).click();
+  await page.screenshot({ path: `${dir}/editor.png`, fullPage: true });
+  await page.getByRole('button', { name: '▶ Oku' }).click();
+  await page.locator('.reader').waitFor();
+  await page.keyboard.press('ArrowRight');
+  await page.screenshot({ path: `${dir}/reader.png` });
+  await page.getByRole('button', { name: 'Okuma ayarları' }).click();
+  await page.screenshot({ path: `${dir}/drawer.png` });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Ayarları kapat' }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${dir}/reader-mobile.png` });
+});
