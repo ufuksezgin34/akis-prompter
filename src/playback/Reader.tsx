@@ -250,8 +250,13 @@ export function Reader({ id }: { id: string }) {
   /* --- kontrol eylemleri --- */
   const empty = words === 0;
 
+  /**
+   * Oynat. countdownSec verilmezse: duraklatılmış akışa devam ederken sayaç yok,
+   * baştan/ilk başlatmada profildeki sayaç. "Tekrar al" sayacı açıkça verir.
+   */
   const play = useCallback(
-    (countdownSec = sRef.current.countdown) => {
+    (countdownSec?: number) => {
+      const cd = countdownSec ?? (engine.state === 'paused' ? 0 : sRef.current.countdown);
       if (empty) {
         setNotice('Okunacak konuşma metni yok. Editörde konuşma bloğu ekleyin.');
         return;
@@ -261,7 +266,7 @@ export function Reader({ id }: { id: string }) {
         void saveScript(withVersion(script, 'Çekim başlangıcı')).catch(() => {});
       }
       setNotice(null);
-      engine.play(countdownSec);
+      engine.play(cd);
       if (app.keepAwake) void wakeLock.request();
     },
     [empty, engine, script, wakeLock, app.keepAwake],
@@ -442,7 +447,7 @@ export function Reader({ id }: { id: string }) {
   const dirY = s.flipY ? -1 : 1;
   const onWheel = (e: React.WheelEvent) => {
     if (locked) return;
-    if (engine.state === 'playing' || engine.state === 'countdown') engine.pause();
+    // Akış durmaz; yazı tekerlekle kaydırılan yerden aynı hızla devam eder.
     engine.nudge(e.deltaY * dirY);
   };
   const onPointerDown = (e: React.PointerEvent) => {
@@ -463,7 +468,8 @@ export function Reader({ id }: { id: string }) {
     if (!d.moved) {
       d.moved = true;
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      if (engine.state === 'playing' || engine.state === 'countdown') engine.pause();
+      // Akış durmaz: sürüklerken beklemeye alınır, bırakınca bu konumdan devam eder.
+      engine.setHeld(true);
     }
     engine.nudge(-dy * dirY);
     d.y = e.clientY;
@@ -471,6 +477,7 @@ export function Reader({ id }: { id: string }) {
   const onPointerUp = () => {
     const d = drag.current;
     drag.current = null;
+    if (engine.isHeld) engine.setHeld(false);
     // Dokunma yalnızca kontrolleri gösterir; asla başa sarmaz veya oynatmaz.
     if (d && !d.moved) showControls();
   };

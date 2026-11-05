@@ -136,3 +136,26 @@ describe('ScrollEngine', () => {
     expect(e.offset).toBeLessThan(320);
   });
 });
+
+describe('elle sürükleme (hold)', () => {
+  it('sürüklerken akış ilerlemez, durum playing kalır, bırakınca sıçramadan devam eder', () => {
+    const c = fakeClock();
+    const e = new ScrollEngine(c.clock);
+    e.setMaxOffset(100000);
+    e.setSpeed(100);
+    e.play(0);
+    c.run(16, 16);
+    c.run(1000, 16);
+    e.setHeld(true);
+    e.nudge(500);
+    const o = e.offset;
+    c.run(2000, 16);
+    expect(e.offset).toBe(o);
+    expect(e.state).toBe('playing');
+    e.setHeld(false);
+    c.run(16, 16);
+    expect(e.offset - o).toBeLessThan(2);
+    c.run(1000, 16);
+    expect(e.offset - o).toBeGreaterThan(95);
+  });
+});

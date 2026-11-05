@@ -42,6 +42,8 @@ export class ScrollEngine {
   private history: { ms: number; offset: number }[] = [];
   private lastHistoryMs = -Infinity;
   loop = false;
+  /** Elle sürükleme sırasında akış durmadan beklemeye alınır (durum 'playing' kalır). */
+  private held = false;
 
   constructor(
     private clock: EngineClock = browserClock,
@@ -67,6 +69,16 @@ export class ScrollEngine {
 
   setEvents(e: EngineEvents): void {
     this.events = e;
+  }
+
+  /** Sürükleme başlarken true, bırakılınca false. Bekleme süresi aktif süreye eklenmez, bırakınca sıçrama olmaz. */
+  setHeld(on: boolean): void {
+    this.held = on;
+    if (!on) this.lastT = null;
+  }
+
+  get isHeld(): boolean {
+    return this.held;
   }
 
   setSpeed(pxPerSec: number): void {
@@ -169,6 +181,11 @@ export class ScrollEngine {
       return;
     }
     if (this._state !== 'playing') return;
+    if (this.held) {
+      this.lastT = t;
+      this.ensureLoop();
+      return;
+    }
     if (this.lastT === null) {
       this.lastT = t;
       this.ensureLoop();

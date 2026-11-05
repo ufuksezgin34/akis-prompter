@@ -301,3 +301,34 @@ test('kumandayı tanıt sihirbazı tuşları atar', async ({ page }) => {
   const row = page.getByRole('row', { name: /Oynat \/ duraklat/ });
   await expect(row).toContainText('Enter');
 });
+
+test('duraklatıp devam edince geri sayım yok; ilk başlatmada var', async ({ page }) => {
+  await newScriptWithText(page, 'Sayaç', Array(4).fill(SHORT).join('\n\n'));
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
+  await page.locator('.reader').waitFor();
+  await page.keyboard.press(' ');
+  await expect(page.locator('.reader')).toHaveAttribute('data-state', 'countdown');
+  await expect(page.locator('.reader')).toHaveAttribute('data-state', 'playing', { timeout: 6000 });
+  await page.keyboard.press(' ');
+  await expect(page.locator('.reader')).toHaveAttribute('data-state', 'paused');
+  await page.keyboard.press(' ');
+  await expect(page.locator('.reader')).toHaveAttribute('data-state', 'playing', { timeout: 300 });
+});
+
+test('akış sürerken tekerlekle kaydırma akışı durdurmaz', async ({ page }) => {
+  await newScriptWithText(page, 'Tekerlek', Array(6).fill(SHORT).join('\n\n'));
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
+  await page.locator('.reader').waitFor();
+  await page.getByRole('button', { name: 'Okuma ayarları' }).click();
+  await page.getByLabel('Başlangıç sayacı').selectOption('0');
+  await page.getByRole('button', { name: 'Ayarları kapat' }).click();
+  await page.keyboard.press(' ');
+  await page.mouse.move(400, 300);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(300);
+  await expect(page.locator('.reader')).toHaveAttribute('data-state', 'playing');
+  const a = await contentOffset(page);
+  expect(a).toBeGreaterThan(350);
+  await page.waitForTimeout(600);
+  expect(await contentOffset(page)).toBeGreaterThan(a);
+});

@@ -22,7 +22,8 @@ Etiketler: ✅ tamamlandı · 🧪 deneysel · ⏳ ertelendi · 🚫 platformda 
 | px/s hız + ayrı “≈ kelime/dk (tahmini)” | ✅ | |
 | Hedef süre modu | ✅ | Kalan mesafeye göre; yerleşim değişince yeniden hesaplanır; elle hız değişince kapanır ve bildirilir |
 | Arka plana geçince duraklat, dönüşte otomatik başlamama | ✅ | Ayardan kapatılabilir |
-| Elle sürükleme/tekerlek akışı duraklatır | ✅ | Dokunma yalnızca kontrolleri gösterir |
+| Elle sürükleme/tekerlek akışı durdurmaz; bırakılan yerden aynı hızla devam eder | ✅ | Kullanıcı isteğiyle değişti. Dokunma yalnızca kontrolleri gösterir |
+| Duraklatıp devam edince geri sayım yok; sayaç yalnızca ilk başlatmada ve Tekrar al’da | ✅ | |
 | Yazı/pencere/yön değişiminde okuma yerini koruma | ✅ | Blok + blok içi cümle + cümle içi oran |
 | Okuma ekranı ayarları (boyut 18–160, kalınlık, satır 1.1–2.5, paragraf, hizalama, renkler, sütun, boşluklar) | ✅ | Anında önizleme, varsayılana dön |
 | Kameraya yakın dar sütun + kamera konumu seçimi | ✅ | Konum kullanıcı seçer; uygulama bilmez |
