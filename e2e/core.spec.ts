@@ -122,7 +122,13 @@ test('5. ayna açıkken kontroller aynalanmaz ve tıklanabilir', async ({ page }
   await page.getByRole('button', { name: '10 saniye ileri' }).click();
   expect(await contentOffset(page)).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Ayna', exact: true }).click();
+  await page.getByRole('radio', { name: /İkisi birden/ }).click();
+  await expect(page.getByTestId('text-layer')).toHaveAttribute('style', /scale\(-1, -1\)/);
+  await page.getByRole('switch', { name: 'Cam modu' }).click();
+  await expect(page.locator('.reader')).toHaveAttribute('data-glass', 'true');
+  await page.getByRole('radio', { name: /Normal/ }).click();
   await expect(page.getByTestId('text-layer')).toHaveAttribute('style', /scale\(1, 1\)/);
+  await page.getByRole('button', { name: 'Tamam' }).click();
 });
 
 test('boş metinde oynatma başlamaz', async ({ page }) => {

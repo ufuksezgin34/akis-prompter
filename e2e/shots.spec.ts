@@ -29,6 +29,13 @@ test('ekran görüntüleri', async ({ page }) => {
   await page.keyboard.press('ArrowRight');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${dir}/m-reader.png` });
+  await page.getByRole('button', { name: 'Ayna', exact: true }).click();
+  await page.getByRole('radio', { name: /Sağ-sol/ }).click();
+  await page.getByRole('switch', { name: 'Cam modu' }).click();
+  await page.screenshot({ path: `${dir}/m-glass-sheet.png` });
+  await page.getByRole('button', { name: 'Tamam' }).click();
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${dir}/m-glass.png` });
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${dir}/m-reader-land.png` });

@@ -16,6 +16,7 @@ export const BASE_SETTINGS: ReaderSettings = {
   cameraPosition: 'none',
   mirrorX: false,
   flipY: false,
+  glassMode: false,
   readingLine: 35,
   showReadingMarker: true,
   focusBand: true,
@@ -78,7 +79,7 @@ export function builtinProfiles(now = Date.now()): Profile[] {
     mk('p-dikey', 'Dikey video (Reels/Shorts)', { fontSize: 52, wpm: 140, readingLine: 30 }),
     mk('p-yatay', 'Yatay video (YouTube)', { fontSize: 48, wpm: 120, readingLine: 35 }),
     mk('p-hizli', 'Hızlı anlatım', { fontSize: 48, wpm: 160 }),
-    mk('p-aynali', 'Aynalı prompter', { mirrorX: true, fontSize: 72, readingLine: 40, showNotes: false, readerTheme: 'black', ...READER_THEMES.black }),
+    mk('p-aynali', 'Aynalı prompter', { mirrorX: true, glassMode: true, fontSize: 72, readingLine: 40, showNotes: false, readerTheme: 'black', ...READER_THEMES.black }),
     mk('p-masaustu', 'Masaüstü', {
       fontSize: 34,
       narrowColumn: true,

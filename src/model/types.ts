@@ -73,6 +73,8 @@ export interface ReaderSettings {
   /** Kullanıcının seçtiği hız (kelime/dk). Okuma ekranı bunu metnin ölçülmüş kelime yoğunluğuyla px/s'ye çevirir. */
   wpm: number;
   readerTheme: 'navy' | 'black' | 'paper';
+  /** Prompter camı: tam siyah zemin, beyaz yazı, renkli bant yok (camda parlamasın). */
+  glassMode: boolean;
   countdown: CountdownSeconds;
   loop: boolean;
   showElapsed: boolean;

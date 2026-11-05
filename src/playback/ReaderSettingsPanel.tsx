@@ -100,6 +100,7 @@ export function ReaderSettingsPanel({ s, set, compact }: { s: ReaderSettings; se
         <legend>Ayna</legend>
         <Toggle label="Yatay ayna (prompter camı)" checked={s.mirrorX} onChange={(v) => set({ mirrorX: v })} />
         <Toggle label="Dikey ters çevir" checked={s.flipY} onChange={(v) => set({ flipY: v })} />
+        <Toggle label="Cam modu (siyah zemin, beyaz yazı, bantsız)" checked={s.glassMode} onChange={(v) => set({ glassMode: v })} />
       </fieldset>
 
       <fieldset>

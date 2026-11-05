@@ -24,6 +24,7 @@ import { clampSettings } from '../profiles/defaults';
 import { setReaderActive } from '../ui/readerActivity';
 import { Icon } from '../ui/Icon';
 import { isNative } from '../platform/native';
+import { Switch } from '../ui/kit';
 
 const STATE_LABEL: Record<EngineState, string> = {
   idle: 'Prova',
@@ -44,6 +45,7 @@ export function Reader({ id }: { id: string }) {
   const [countdown, setCountdown] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [drawer, setDrawer] = useState(false);
+  const [glassSheet, setGlassSheet] = useState(false);
   const [locked, setLocked] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [wake, setWake] = useState<WakeLockStatus>('inactive');
@@ -512,8 +514,8 @@ export function Reader({ id }: { id: string }) {
     paddingRight: s.paddingX,
   };
   const rootStyle = {
-    '--r-fg': s.textColor,
-    '--r-bg': s.bgColor,
+    '--r-fg': s.glassMode ? '#ffffff' : s.textColor,
+    '--r-bg': s.glassMode ? '#000000' : s.bgColor,
     '--r-accent': s.accentColor,
     '--r-size': `${s.fontSize}px`,
     '--r-weight': s.fontWeight,
@@ -534,7 +536,7 @@ export function Reader({ id }: { id: string }) {
   );
 
   return (
-    <div className={`reader${hidden ? ' controls-hidden' : ''}${locked ? ' is-locked' : ''}`} style={rootStyle} data-state={state} data-theme-r={s.readerTheme}>
+    <div className={`reader${hidden ? ' controls-hidden' : ''}${locked ? ' is-locked' : ''}`} style={rootStyle} data-state={state} data-theme-r={s.readerTheme} data-glass={s.glassMode || undefined}>
       <div
         ref={stageRef}
         className="stage"
@@ -689,11 +691,20 @@ export function Reader({ id }: { id: string }) {
           </div>
           <div className="tools">
             <button className="tool" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}><span className="aa">Aa</span></button>
-            <button className="tool" onClick={() => run('mirror')} aria-pressed={s.mirrorX} aria-label="Ayna"><Icon name="mirror" /></button>
+            <button className="tool" onClick={() => setGlassSheet(true)} aria-pressed={s.mirrorX || s.flipY} aria-label="Ayna"><Icon name="mirror" /></button>
             <button className="tool" onClick={() => run('retake')} aria-label="Tekrar al" title={`Tekrar al (${keyLabel(app.keymap.retake[0] ?? '')})`}><Icon name="retake" /></button>
             <button className="tool" onClick={() => setLocked(true)} aria-label="Kilitle"><Icon name="lock" /></button>
           </div>
         </nav>
+      )}
+
+      {glassSheet && !locked && (
+        <GlassSheet
+          s={s}
+          onPick={(mirrorX, flipY) => setSettings({ mirrorX, flipY })}
+          onGlass={(glassMode) => setSettings({ glassMode })}
+          onClose={() => setGlassSheet(false)}
+        />
       )}
 
       {drawer && !locked && (
@@ -751,6 +762,50 @@ export function Reader({ id }: { id: string }) {
           <ReaderSettingsPanel s={s} set={setSettings} compact />
         </aside>
       )}
+    </div>
+  );
+}
+
+const ORIENTATIONS: { label: string; hint: string; x: boolean; y: boolean }[] = [
+  { label: 'Normal', hint: 'Ayna yok', x: false, y: false },
+  { label: 'Sağ-sol', hint: 'Yatay ayna', x: true, y: false },
+  { label: 'Alt-üst', hint: 'Dikey ters', x: false, y: true },
+  { label: 'İkisi birden', hint: '180° döndür', x: true, y: true },
+];
+
+/** Cam ayarı: dört yön seçeneği, her biri örnek yazıyla; camda düz okunan seçilir. */
+function GlassSheet({ s, onPick, onGlass, onClose }: { s: ReaderSettings; onPick: (x: boolean, y: boolean) => void; onGlass: (v: boolean) => void; onClose: () => void }) {
+  return (
+    <div className="glass-sheet" role="dialog" aria-label="Prompter camı ayarı">
+      <header className="drawer-head">
+        <strong>Prompter camı</strong>
+        <button className="icon-btn" aria-label="Kapat" onClick={onClose}><Icon name="close" /></button>
+      </header>
+      <p className="glass-help">Telefonu düzeneğe yerleştir ve cama bak. Camda <strong>düz okunan</strong> kartı seç.</p>
+      <div className="orient-grid" role="radiogroup" aria-label="Yön">
+        {ORIENTATIONS.map((o) => {
+          const on = s.mirrorX === o.x && s.flipY === o.y;
+          return (
+            <button key={o.label} role="radio" aria-checked={on} className="orient" onClick={() => onPick(o.x, o.y)}>
+              <span className="orient-sample" style={{ transform: `scale(${o.x ? -1 : 1}, ${o.y ? -1 : 1})` }} aria-hidden="true">
+                <span className="orient-word">Metin</span>
+                <span className="orient-arrow">↑</span>
+              </span>
+              <span className="orient-label">{o.label}</span>
+              <span className="orient-hint">{o.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      <label className="glass-toggle">
+        <span>
+          <strong>Cam modu</strong>
+          <small>Tam siyah zemin ve beyaz yazı; renkli bant kalkar. Camda en net görüntü budur.</small>
+        </span>
+        <Switch checked={s.glassMode} onChange={onGlass} label="Cam modu" />
+      </label>
+      <p className="glass-help small">İpucu: Telefonun parlaklığını en yükseğe al, ortamı biraz karart. Yansımada çift görüntü varsa camın kaplamalı yüzü telefona bakmalı.</p>
+      <button className="btn primary block" onClick={onClose}>Tamam</button>
     </div>
   );
 }
