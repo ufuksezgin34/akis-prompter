@@ -1,4 +1,5 @@
 import type { ActionId, KeyMap } from '../model/types';
+import { remoteKeyLabel } from './remoteInput';
 
 /** Yazı alanlarında kısayollar devre dışı. */
 export function isTypingTarget(t: EventTarget | null): boolean {
@@ -15,6 +16,14 @@ export function isTypingTarget(t: EventTarget | null): boolean {
 
 export function normalizeKey(key: string): string {
   return key.length === 1 ? key.toLocaleLowerCase('tr') : key;
+}
+
+/** Kumanda/oyun kolu/medya tuşu adı için (yazı alanı denetimi gerekmez). */
+export function actionForRemoteKey(map: KeyMap, key: string): ActionId | null {
+  for (const [action, keys] of Object.entries(map) as [ActionId, string[]][]) {
+    if (keys.includes(key)) return action;
+  }
+  return null;
 }
 
 export function actionForKey(map: KeyMap, e: Pick<KeyboardEvent, 'key' | 'target' | 'ctrlKey' | 'metaKey' | 'altKey'>): ActionId | null {
@@ -39,5 +48,5 @@ export function keyLabel(key: string): string {
     PageDown: 'Page Down',
     Enter: 'Enter',
   };
-  return names[key] ?? (key.length === 1 ? key.toLocaleUpperCase('tr') : key);
+  return names[key] ?? remoteKeyLabel(key) ?? (key.length === 1 ? key.toLocaleUpperCase('tr') : key);
 }

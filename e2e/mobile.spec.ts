@@ -14,6 +14,7 @@ async function allControlsInViewport(page: import('@playwright/test').Page) {
     const vh = innerHeight;
     return [...document.querySelectorAll<HTMLElement>('.controls button')]
       .map((b) => ({ name: b.getAttribute('aria-label') ?? b.textContent, r: b.getBoundingClientRect() }))
+      .filter(({ r }) => r.width > 0)
       .filter(({ r }) => r.left < -1 || r.right > vw + 1 || r.top < -1 || r.bottom > vh + 1 || r.height < 40)
       .map((x) => `${x.name} ${Math.round(x.r.width)}x${Math.round(x.r.height)}`);
   });
@@ -67,4 +68,17 @@ test('ekran kilidi: kısa dokunma açmaz, uzun basma açar', async ({ page }) =>
   await page.waitForTimeout(1200);
   await page.mouse.up();
   await expect(page.locator('.controls')).toHaveCount(1);
+});
+
+test('yatay ekranda kontroller tek satırlık ince çubuk', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await freshStart(page);
+  await newScriptWithText(page, 'Yatay', TEXT);
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
+  await page.locator('.reader').waitFor();
+  const box = (await page.locator('.controls').boundingBox())!;
+  expect(box.height).toBeLessThan(90);
+  await expect(page.getByLabel('Zaman çizelgesi: ileri veya geri sar')).toBeVisible();
+  await expect(page.locator('.speed-compact')).toBeVisible();
+  await allControlsInViewport(page);
 });

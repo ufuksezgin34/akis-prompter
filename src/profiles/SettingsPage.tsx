@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ActionId, CountdownSeconds, KeyMap, Profile, ReaderSettings } from '../model/types';
 import { useStore } from '../ui/store';
 import { ACTION_LABELS, DEFAULT_KEYMAP, clampSettings } from './defaults';
-import { navigate } from '../ui/store';
+import { announce, navigate } from '../ui/store';
+import { captureHardwareKeys, onRemoteKey } from '../platform/remoteInput';
 import { Icon, type IconName } from '../ui/Icon';
 import { Brand, Group, PageHead, Row, Switch } from '../ui/kit';
 import { ReaderSettingsPanel } from '../playback/ReaderSettingsPanel';
@@ -55,7 +56,7 @@ export function SettingsPage() {
         <Row icon="phone" label="Ekranı açık tut" hint="Okurken ekran kararmasın">
           <Switch checked={app.keepAwake} onChange={(v) => void updateApp({ keepAwake: v })} label="Ekranı açık tut" />
         </Row>
-        <Row icon="keyboard" label="Klavye, kumanda ve pedal" onClick={() => navigate({ name: 'keys' })} />
+        <Row icon="keyboard" label="Bluetooth kumanda ve klavye" onClick={() => navigate({ name: 'keys' })} />
       </Group>
 
       <Group title="Profiller">
@@ -240,7 +241,7 @@ function SliderRow({ icon, label, value, min, max, step = 1, fmt = (v: number) =
 export function KeysPage() {
   return (
     <main className="page">
-      <PageHead title="Klavye ve kumanda" onBack={() => navigate({ name: 'settings' })} />
+      <PageHead title="Kumanda ve klavye" onBack={() => navigate({ name: 'settings' })} />
       <KeymapSection />
     </main>
   );
@@ -260,47 +261,114 @@ export function PrivacyPage() {
   );
 }
 
+const WIZARD_STEPS: ActionId[] = ['togglePlay', 'speedUp', 'speedDown', 'nextSentence', 'prevSentence', 'retake'];
+
+/** Bir tuşu eyleme bağlar ve başka eylemlerden kaldırır. mode 'add': mevcut tuşlar korunur. */
+function assignKey(map: KeyMap, action: ActionId, key: string, mode: 'add' | 'replace'): KeyMap {
+  const k = normalizeKey(key);
+  return Object.fromEntries(
+    Object.entries(map).map(([a, keys]) => {
+      const others = keys.filter((x) => normalizeKey(x) !== k);
+      return [a, a === action ? (mode === 'replace' ? [k] : [...others, k]) : others];
+    }),
+  ) as KeyMap;
+}
+
 function KeymapSection() {
   const { app, updateApp } = useStore();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
   const [lastKey, setLastKey] = useState<string | null>(null);
+  const [wizard, setWizard] = useState<{ step: number; done: string[] } | null>(null);
+  const keymapRef = useRef(app.keymap);
+  keymapRef.current = app.keymap;
+
+  // Kumanda tuşu geldiğinde: test alanı, tek eylem değiştirme veya sihirbaz adımı.
+  const handleKey = useRef<(key: string) => boolean>(() => false);
+  handleKey.current = (key: string) => {
+    if (key === 'Tab') return false;
+    setLastKey(key);
+    if (wizard) {
+      const action = WIZARD_STEPS[wizard.step]!;
+      void updateApp({ keymap: assignKey(keymapRef.current, action, key, 'add') });
+      const done = [...wizard.done, `${ACTION_LABELS[action]}: ${keyLabel(key)}`];
+      setWizard(wizard.step + 1 < WIZARD_STEPS.length ? { step: wizard.step + 1, done } : null);
+      if (wizard.step + 1 >= WIZARD_STEPS.length) announce('Kumanda tanıtıldı.');
+      return true;
+    }
+    if (capturing) {
+      void updateApp({ keymap: assignKey(keymapRef.current, capturing, key, 'replace') });
+      setCapturing(null);
+      return true;
+    }
+    return false;
+  };
 
   useEffect(() => {
-    if (!capturing) return;
+    const release = captureHardwareKeys();
+    const off = onRemoteKey((k) => void handleKey.current(k));
     const onKey = (e: KeyboardEvent) => {
+      const testArea = (e.target as HTMLElement | null)?.classList?.contains('key-test');
+      if (!wizard && !capturing && !testArea) return;
+      if (wizard && e.key === 'Escape') return setWizard(null);
       e.preventDefault();
       e.stopPropagation();
-      if (e.key === 'Tab') return;
-      const k = normalizeKey(e.key);
-      // Aynı tuş başka eylemdeyse oradan kaldır.
-      const next = Object.fromEntries(
-        Object.entries(app.keymap).map(([a, keys]) => [a, a === capturing ? [k] : keys.filter((x) => normalizeKey(x) !== k)]),
-      ) as KeyMap;
-      void updateApp({ keymap: next });
-      setCapturing(null);
+      handleKey.current(e.key);
     };
     window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [capturing, app.keymap, updateApp]);
+    return () => {
+      window.removeEventListener('keydown', onKey, { capture: true });
+      off();
+      release();
+    };
+  }, [wizard, capturing]);
 
   return (
     <section className="panel">
-      <h2>Klavye, kumanda ve pedal</h2>
+      <h2>Bluetooth kumanda ve pedal</h2>
       <p className="muted">
-        Klavye gibi davranan Bluetooth sunum kumandaları ve ayak pedalları burada eşlenebilir. Her cihaz farklı tuş gönderir; tüm cihazların çalışacağı garanti edilemez. Aşağıdaki test alanında cihazınıza basıp hangi tuşu gönderdiğini görün.
+        Kumandayı telefonun Bluetooth ayarlarından eşleyin. Ulanzi (MOCUTE) kumandalarda yan anahtarı önce <strong>KEY</strong> konumunda deneyin; düğmeler
+        görünmezse <strong>GAME</strong> konumuna alın. Android uygulamasında ses ve medya tuşları da çalışır; tarayıcıda ses tuşları yakalanamaz.
       </p>
+
+      {wizard ? (
+        <div className="wizard" role="dialog" aria-live="polite" aria-label="Kumandayı tanıt">
+          <p className="wizard-step">Adım {wizard.step + 1} / {WIZARD_STEPS.length}</p>
+          <p className="wizard-prompt">
+            Kumandada <strong>{ACTION_LABELS[WIZARD_STEPS[wizard.step]!]}</strong> için kullanmak istediğin düğmeye bas
+          </p>
+          {wizard.done.length > 0 && (
+            <ul className="wizard-done">
+              {wizard.done.map((d) => (
+                <li key={d}><Icon name="check" size={18} /> {d}</li>
+              ))}
+            </ul>
+          )}
+          <div className="row">
+            <button className="btn" onClick={() => setWizard(wizard.step + 1 < WIZARD_STEPS.length ? { ...wizard, step: wizard.step + 1 } : null)}>Bu adımı atla</button>
+            <button className="btn ghost" onClick={() => setWizard(null)}>Bitir</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn primary big block" onClick={() => { setCapturing(null); setWizard({ step: 0, done: [] }); }}>
+          Kumandayı tanıt
+        </button>
+      )}
+
       <div
         className="key-test"
         tabIndex={0}
         role="textbox"
-        aria-label="Tuş test alanı: odaklanıp kumandaya basın"
-        onKeyDown={(e) => {
-          e.preventDefault();
-          setLastKey(e.key);
-        }}
+        aria-label="Tuş test alanı: dokunup kumandaya basın"
       >
-        {lastKey ? <>Son tuş: <kbd>{keyLabel(lastKey)}</kbd> <span className="muted">({JSON.stringify(lastKey)})</span></> : 'Buraya tıklayıp kumandanın düğmesine basın'}
+        {lastKey ? (
+          <>
+            Son tuş: <kbd>{keyLabel(lastKey)}</kbd> <span className="muted">({lastKey})</span>
+          </>
+        ) : (
+          'Buraya dokunup kumandanın düğmelerine basın; gelen tuş burada görünür.'
+        )}
       </div>
+
       <table className="keymap">
         <tbody>
           {(Object.keys(ACTION_LABELS) as ActionId[]).map((a) => (
@@ -308,7 +376,7 @@ function KeymapSection() {
               <th scope="row">{ACTION_LABELS[a]}</th>
               <td>{(app.keymap[a] ?? []).map((k) => <kbd key={k}>{keyLabel(k)}</kbd>)}</td>
               <td>
-                <button className="btn" onClick={() => setCapturing(a)} aria-pressed={capturing === a}>
+                <button className="btn" onClick={() => { setWizard(null); setCapturing(a); }} aria-pressed={capturing === a}>
                   {capturing === a ? 'Bir tuşa basın…' : 'Değiştir'}
                 </button>
               </td>
@@ -317,7 +385,7 @@ function KeymapSection() {
         </tbody>
       </table>
       <button className="btn" onClick={() => void updateApp({ keymap: structuredClone(DEFAULT_KEYMAP) })}>Varsayılan tuşlara dön</button>
-      <p className="muted small">Metin yazılan alanlarda kısayollar devre dışıdır; editörde Boşluk tuşu oynatmayı başlatmaz.</p>
+      <p className="muted small">Metin yazılan alanlarda kısayollar devre dışıdır; editörde Boşluk tuşu oynatmayı başlatmaz. Her kumanda farklı tuş gönderir; tüm cihazların çalışacağı garanti edilemez.</p>
     </section>
   );
 }

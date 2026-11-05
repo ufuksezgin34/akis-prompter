@@ -17,7 +17,8 @@ import {
 import { ReaderText } from './ReaderText';
 import { ReaderSettingsPanel } from './ReaderSettingsPanel';
 import { navigate, useStore, announce } from '../ui/store';
-import { actionForKey, keyLabel } from '../platform/keyboard';
+import { actionForKey, actionForRemoteKey, keyLabel } from '../platform/keyboard';
+import { captureHardwareKeys, onRemoteKey } from '../platform/remoteInput';
 import { createWakeLock, fullscreen, isStandalone, type WakeLockStatus } from '../platform/wakeLock';
 import { clampSettings } from '../profiles/defaults';
 import { setReaderActive } from '../ui/readerActivity';
@@ -51,12 +52,15 @@ export function Reader({ id }: { id: string }) {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const hudRef = useRef<{ elapsed: HTMLElement | null; remaining: HTMLElement | null; progress: HTMLElement | null; wpm: HTMLElement | null }>({
+  const hudRef = useRef<{ elapsed: HTMLElement | null; remaining: HTMLElement | null; scrub: HTMLInputElement | null; pos: HTMLElement | null; total: HTMLElement | null }>({
     elapsed: null,
     remaining: null,
-    progress: null,
-    wpm: null,
+    scrub: null,
+    pos: null,
+    total: null,
   });
+  /** Zaman çizelgesi sürüklenirken motor konumu çizelgeyi ezmesin. */
+  const scrubbing = useRef<{ wasPlaying: boolean } | null>(null);
   const layoutRef = useRef<Layout | null>(null);
   const activeSentence = useRef<HTMLElement | null>(null);
   const lastHud = useRef(0);
@@ -135,7 +139,14 @@ export function Reader({ id }: { id: string }) {
       const sp = engine.speed;
       if (h.elapsed) h.elapsed.textContent = formatDuration(engine.activeMs / 1000);
       if (h.remaining) h.remaining.textContent = sp > 0 ? `≈ ${formatDuration((lay.maxOffset - offset) / sp)}` : '—';
-      if (h.progress) h.progress.style.transform = `scaleX(${lay.maxOffset > 0 ? offset / lay.maxOffset : 0})`;
+      const frac = lay.maxOffset > 0 ? offset / lay.maxOffset : 0;
+      if (h.scrub && !scrubbing.current) {
+        h.scrub.value = String(Math.round(frac * 1000));
+        h.scrub.style.setProperty('--pct', `${frac * 100}%`);
+      }
+      // Çizelge zamanı: geçerli hızla metindeki konumun karşılığı (tahmini).
+      if (h.pos) h.pos.textContent = sp > 0 ? formatDuration(offset / sp) : '0:00';
+      if (h.total) h.total.textContent = sp > 0 ? formatDuration(lay.maxOffset / sp) : '—';
     },
     [engine],
   );
@@ -351,6 +362,19 @@ export function Reader({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [engine, play, changeSpeed, seekTo, setSettings, retake, exit, drawer],
   );
+
+  /* --- kumanda: oyun kolu ve Android ses/medya tuşları --- */
+  useEffect(() => {
+    const release = captureHardwareKeys();
+    const off = onRemoteKey((key) => {
+      const a = actionForRemoteKey(app.keymap, key);
+      if (a) run(a);
+    });
+    return () => {
+      off();
+      release();
+    };
+  }, [app.keymap, run]);
 
   /* --- klavye / pedal --- */
   useEffect(() => {
@@ -595,8 +619,37 @@ export function Reader({ id }: { id: string }) {
       ) : (
         <nav className="controls" aria-label="Okuma kontrolleri" onPointerMove={showControls} onFocus={showControls}>
           {s.showProgress && (
-            <div className="progress" aria-hidden="true">
-              <div className="progress-fill" ref={(el) => void (hudRef.current.progress = el)} />
+            <div className="timeline">
+              <span className="tl-time" ref={(el) => void (hudRef.current.pos = el)}>0:00</span>
+              <input
+                ref={(el) => void (hudRef.current.scrub = el)}
+                className="range scrub"
+                type="range"
+                min={0}
+                max={1000}
+                step={1}
+                defaultValue={0}
+                aria-label="Zaman çizelgesi: ileri veya geri sar"
+                onPointerDown={() => {
+                  const wasPlaying = engine.state === 'playing';
+                  if (wasPlaying) engine.pause();
+                  scrubbing.current = { wasPlaying };
+                }}
+                onInput={(e) => {
+                  const lay = layoutRef.current;
+                  if (!lay) return;
+                  const v = Number(e.currentTarget.value) / 1000;
+                  e.currentTarget.style.setProperty('--pct', `${v * 100}%`);
+                  engine.seek(v * lay.maxOffset);
+                }}
+                onPointerUp={() => {
+                  const sc = scrubbing.current;
+                  scrubbing.current = null;
+                  if (sc?.wasPlaying) engine.play(0);
+                }}
+                onPointerCancel={() => (scrubbing.current = null)}
+              />
+              <span className="tl-time total" ref={(el) => void (hudRef.current.total = el)}>—</span>
             </div>
           )}
           <div className="speed-row">
@@ -628,6 +681,11 @@ export function Reader({ id }: { id: string }) {
               <Icon name={playing ? 'pause' : 'play'} size={34} />
             </button>
             <button className="ctl round fwd" onClick={() => skip(10)} aria-label="10 saniye ileri"><span className="skip">10</span><Icon name="retake" size={34} /></button>
+          </div>
+          <div className="speed-compact" role="group" aria-label="Hız">
+            <button className="ctl mini" onClick={() => run('speedDown')} aria-label="Hızı azalt"><Icon name="minus" size={18} /></button>
+            <span><strong>{s.wpm}</strong> k/dk</span>
+            <button className="ctl mini" onClick={() => run('speedUp')} aria-label="Hızı artır"><Icon name="plus" size={18} /></button>
           </div>
           <div className="tools">
             <button className="tool" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}><span className="aa">Aa</span></button>

@@ -271,3 +271,27 @@ test('6b. tekrar al: mevcut cümle başına döner, 3 sn sayar, yeniden başlar'
   expect(await contentOffset(page)).toBeCloseTo(sentenceStart, 0);
   await expect(page.locator('.reader')).toHaveAttribute('data-state', 'playing', { timeout: 5000 });
 });
+
+test('zaman çizelgesiyle ileri/geri sarma', async ({ page }) => {
+  await newScriptWithText(page, 'Çizelge', Array(6).fill(SHORT).join('\n\n'));
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
+  await page.locator('.reader').waitFor();
+  const scrub = page.getByLabel('Zaman çizelgesi: ileri veya geri sar');
+  await scrub.fill('600');
+  const mid = await contentOffset(page);
+  expect(mid).toBeGreaterThan(50);
+  await scrub.fill('100');
+  expect(await contentOffset(page)).toBeLessThan(mid);
+});
+
+test('kumandayı tanıt sihirbazı tuşları atar', async ({ page }) => {
+  await page.goto('./#/keys');
+  await page.getByRole('button', { name: 'Kumandayı tanıt' }).click();
+  await expect(page.getByText(/Adım 1 \/ 6/)).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(/Adım 2 \/ 6/)).toBeVisible();
+  await page.keyboard.press('PageUp');
+  await page.getByRole('button', { name: 'Bitir' }).click();
+  const row = page.getByRole('row', { name: /Oynat \/ duraklat/ });
+  await expect(row).toContainText('Enter');
+});

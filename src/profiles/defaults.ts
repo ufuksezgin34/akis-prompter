@@ -102,11 +102,12 @@ export const LEGACY_PROFILE_MAP: Record<string, { id: string; oldName: string }>
 };
 
 export const DEFAULT_KEYMAP: KeyMap = {
-  togglePlay: [' '],
-  speedUp: ['ArrowUp'],
-  speedDown: ['ArrowDown'],
-  prevSentence: ['ArrowLeft'],
-  nextSentence: ['ArrowRight'],
+  // Medya ve ses tuşları: Android paketinde Bluetooth kumandalardan gelir (tarayıcıda ses tuşları yakalanamaz).
+  togglePlay: [' ', 'MediaPlayPause', 'MediaPlay', 'MediaPause'],
+  speedUp: ['ArrowUp', 'VolumeUp'],
+  speedDown: ['ArrowDown', 'VolumeDown'],
+  prevSentence: ['ArrowLeft', 'MediaTrackPrevious', 'MediaRewind'],
+  nextSentence: ['ArrowRight', 'MediaTrackNext', 'MediaFastForward'],
   toStart: ['Home'],
   fullscreen: ['f'],
   mirror: ['m'],
