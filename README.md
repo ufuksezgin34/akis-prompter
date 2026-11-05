@@ -35,6 +35,8 @@ Playwright, tarayıcıyı `/usr/bin/google-chrome` yolundan kullanır (ortamda P
 
 `dist/` klasörü herhangi bir statik HTTPS sunucusunda çalışır (`base: './'`, hash yönlendirme — sunucu ayarı gerekmez, alt klasörde de çalışır). Özel alan adı gerekmez.
 
+**Canlı adres:** https://ufuksezgin34.github.io/akis-prompter/ — `main` dalına her gönderimde `.github/workflows/deploy.yml` test eder, derler ve `gh-pages` dalına yayınlar.
+
 **Seçenek 1 — GitHub Pages** (5 Kasım 2026’da resmî dokümandan doğrulandı):
 - Ücretsiz GitHub hesabında yalnızca **public** depolarda çalışır. Metinleriniz depoda değil, tarayıcınızda durur; depoya yalnızca uygulama kodu gider.
 - Site en fazla 1 GB; aylık 100 GB **yumuşak** bant genişliği sınırı; saatte 10 derleme yumuşak sınırı.
