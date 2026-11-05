@@ -66,9 +66,9 @@ export function builtinProfiles(now = Date.now()): Profile[] {
     settings: { ...BASE_SETTINGS, ...patch },
   });
   return [
-    mk('p-tuba-reels', 'Tuba — Reels', { fontSize: 64, speed: 70, readingLine: 30, columnWidth: 92 }),
-    mk('p-tuba-youtube', 'Tuba — YouTube', { fontSize: 54, speed: 55, readingLine: 35 }),
-    mk('p-ufuk-kisa', 'Ufuk — Kısa Video', { fontSize: 60, speed: 75 }),
+    mk('p-dikey', 'Dikey video (Reels/Shorts)', { fontSize: 64, speed: 70, readingLine: 30, columnWidth: 92 }),
+    mk('p-yatay', 'Yatay video (YouTube)', { fontSize: 54, speed: 55, readingLine: 35 }),
+    mk('p-hizli', 'Hızlı anlatım', { fontSize: 60, speed: 75 }),
     mk('p-aynali', 'Aynalı Prompter', { mirrorX: true, fontSize: 72, readingLine: 40, showNotes: false }),
     mk('p-masaustu', 'Masaüstü', {
       fontSize: 34,
@@ -81,6 +81,16 @@ export function builtinProfiles(now = Date.now()): Profile[] {
     }),
   ];
 }
+
+/**
+ * İlk sürümlerdeki kişisel başlangıç profilleri → genel adlar.
+ * Kullanıcının elle değiştirdiği adlar korunur; yalnızca hiç değiştirilmemiş varsayılan adlar yenilenir.
+ */
+export const LEGACY_PROFILE_MAP: Record<string, { id: string; oldName: string }> = {
+  'p-tuba-reels': { id: 'p-dikey', oldName: 'Tuba — Reels' },
+  'p-tuba-youtube': { id: 'p-yatay', oldName: 'Tuba — YouTube' },
+  'p-ufuk-kisa': { id: 'p-hizli', oldName: 'Ufuk — Kısa Video' },
+};
 
 export const DEFAULT_KEYMAP: KeyMap = {
   togglePlay: [' '],
@@ -114,9 +124,9 @@ export const ACTION_LABELS: Record<keyof KeyMap, string> = {
 
 export function defaultAppSettings(): AppSettings {
   return {
-    activeProfileId: 'p-tuba-youtube',
+    activeProfileId: 'p-yatay',
     keymap: structuredClone(DEFAULT_KEYMAP),
-    editorTheme: 'system',
+    editorTheme: 'dark',
     onboardingDone: false,
     persistRequested: false,
   };

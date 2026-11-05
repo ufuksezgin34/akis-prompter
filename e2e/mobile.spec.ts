@@ -31,7 +31,7 @@ for (const vp of [
     await noHorizontalOverflow(page);
     await newScriptWithText(page, 'Mobil', TEXT);
     await noHorizontalOverflow(page);
-    await page.getByRole('button', { name: '▶ Oku' }).click();
+    await page.getByRole('button', { name: 'Oku', exact: true }).click();
     await page.locator('.reader').waitFor();
     await allControlsInViewport(page);
     await page.getByRole('button', { name: 'Okuma ayarları' }).click();
@@ -44,7 +44,7 @@ for (const vp of [
 test('dokunma kontrolleri gösterir, başa sarmaz veya oynatmaz', async ({ page }) => {
   await freshStart(page);
   await newScriptWithText(page, 'Dokunma', Array(8).fill(TEXT).join('\n\n'));
-  await page.getByRole('button', { name: '▶ Oku' }).click();
+  await page.getByRole('button', { name: 'Oku', exact: true }).click();
   await page.locator('.reader').waitFor();
   await page.getByRole('button', { name: 'Sonraki cümle' }).tap();
   await page.getByRole('button', { name: 'Sonraki cümle' }).tap();
@@ -57,8 +57,8 @@ test('dokunma kontrolleri gösterir, başa sarmaz veya oynatmaz', async ({ page 
 test('ekran kilidi: kısa dokunma açmaz, uzun basma açar', async ({ page }) => {
   await freshStart(page);
   await newScriptWithText(page, 'Kilit', TEXT);
-  await page.getByRole('button', { name: '▶ Oku' }).click();
-  await page.getByRole('button', { name: '🔒 Kilitle' }).tap();
+  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Kilitle' }).tap();
   await expect(page.locator('.controls')).toHaveCount(0);
   await page.locator('.unlock').tap();
   await expect(page.locator('.controls')).toHaveCount(0);

@@ -5,22 +5,26 @@ import { Editor } from './editor/Editor';
 import { Reader } from './playback/Reader';
 import { Onboarding } from './ui/Onboarding';
 import { UpdatePrompt } from './ui/UpdatePrompt';
+import { Icon, type IconName } from './ui/Icon';
 
 const SettingsPage = lazy(() => import('./profiles/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const BackupPage = lazy(() => import('./backup/BackupPage').then((m) => ({ default: m.BackupPage })));
 
 function Nav({ route }: { route: Route }) {
-  const items: { r: Route; label: string; icon: string }[] = [
-    { r: { name: 'library' }, label: 'Metinlerim', icon: '☰' },
-    { r: { name: 'settings' }, label: 'Ayarlar', icon: '⚙' },
-    { r: { name: 'backup' }, label: 'Yedekleme', icon: '⇅' },
+  const items: { r: Route; label: string; icon: IconName }[] = [
+    { r: { name: 'library' }, label: 'Metinlerim', icon: 'library' },
+    { r: { name: 'settings' }, label: 'Ayarlar', icon: 'settings' },
+    { r: { name: 'backup' }, label: 'Yedekleme', icon: 'backup' },
   ];
   return (
     <nav className="app-nav" aria-label="Ana menü">
-      <span className="brand" aria-hidden="true">Akış</span>
+      <span className="brand" aria-hidden="true">
+        <span className="brand-mark" />
+        Teleprompter
+      </span>
       {items.map((i) => (
         <button key={i.r.name} aria-current={route.name === i.r.name ? 'page' : undefined} onClick={() => navigate(i.r)}>
-          <span aria-hidden="true">{i.icon}</span> {i.label}
+          <Icon name={i.icon} /> <span>{i.label}</span>
         </button>
       ))}
     </nav>
@@ -43,8 +47,7 @@ function Shell() {
   }, []);
   useEffect(() => {
     const root = document.documentElement;
-    if (app.editorTheme === 'system') root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', app.editorTheme);
+    root.setAttribute('data-theme', app.editorTheme);
   }, [app.editorTheme]);
 
   if (!ready) return <div className="boot" aria-busy="true" />;

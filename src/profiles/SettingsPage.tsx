@@ -6,6 +6,7 @@ import { ReaderSettingsPanel } from '../playback/ReaderSettingsPanel';
 import { keyLabel, normalizeKey } from '../platform/keyboard';
 import { Dialog } from '../ui/common';
 import { isStandalone } from '../platform/wakeLock';
+import { isNative } from '../platform/native';
 
 export function SettingsPage() {
   const { profiles, activeProfile, app, updateApp, saveProfile, duplicateProfile, removeProfile } = useStore();
@@ -70,7 +71,7 @@ export function SettingsPage() {
         <button className="btn" onClick={() => void updateApp({ onboardingDone: false })}>İlk kullanım rehberini tekrar göster</button>
       </section>
 
-      <InstallSection />
+      {!isNative() && <InstallSection />}
 
       <Dialog open={!!editing} title={`Profil: ${editing?.name ?? ''}`} onClose={() => setEditing(null)} wide>
         {editing && (

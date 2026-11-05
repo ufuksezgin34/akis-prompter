@@ -13,9 +13,9 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Akış Prompter',
-        short_name: 'Akış',
-        description: 'Türkçe öncelikli, cihazda çalışan teleprompter',
+        name: 'Teleprompter',
+        short_name: 'Teleprompter',
+        description: 'Cihazda çalışan, ücretsiz ve reklamsız teleprompter',
         lang: 'tr',
         theme_color: '#000000',
         background_color: '#000000',

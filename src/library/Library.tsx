@@ -5,6 +5,7 @@ import { estimateSeconds, formatDuration, includesTr, parseMarkdown, parsePlainT
 import { navigate, useStore } from '../ui/store';
 import { formatDate, looksLikeText, readFileText, Toast, Dialog } from '../ui/common';
 import { longFormSample, reelsSample, stressSample } from './samples';
+import { Icon } from '../ui/Icon';
 
 type Sort = 'updated' | 'created' | 'title' | 'duration';
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
@@ -119,14 +120,17 @@ export function Library() {
       <header className="lib-head">
         <h1>Metinlerim</h1>
         <div className="row">
-          <button className="btn primary" onClick={() => void onNew()}>+ Yeni metin</button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>İçe aktar (TXT/MD)</button>
+          <button className="btn primary" onClick={() => void onNew()}><Icon name="plus" size={20} /> Yeni metin</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" size={20} /> İçe aktar</button>
           <input ref={fileRef} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple hidden onChange={(e) => void onImport(e.target.files)} />
         </div>
       </header>
 
       <div className="filters">
-        <input type="search" placeholder="Ara (başlık, etiket, içerik)" aria-label="Metinlerde ara" value={q} onChange={(e) => setQ(e.target.value)} />
+        <label className="search">
+          <Icon name="search" size={20} />
+          <input type="search" placeholder="Başlık, etiket veya içerikte ara" aria-label="Metinlerde ara" value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
         <select aria-label="Sırala" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           <option value="updated">Son düzenlenen</option>
           <option value="created">Oluşturma tarihi</option>
@@ -147,7 +151,7 @@ export function Library() {
         )}
         <div className="seg" role="group" aria-label="Görünüm">
           <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Tümü</button>
-          <button aria-pressed={view === 'fav'} onClick={() => setView('fav')}>★ Favoriler</button>
+          <button aria-pressed={view === 'fav'} onClick={() => setView('fav')}>Favoriler</button>
           <button aria-pressed={view === 'trash'} onClick={() => setView('trash')}>Çöp kutusu</button>
         </div>
       </div>
@@ -156,61 +160,75 @@ export function Library() {
         <div className="empty">
           {scripts.length === 0 ? (
             <>
-              <p>Henüz metin yok. Yeni bir metin oluşturun, dosya içe aktarın veya örneklerle deneyin.</p>
-              <button className="btn" onClick={() => void addSamples()}>Örnek metinleri ekle</button>
+              <div className="empty-art" aria-hidden="true">
+                <span /><span /><span className="hot" /><span />
+              </div>
+              <h2>İlk metnini ekle</h2>
+              <p>Yaz, yapıştır ya da TXT/Markdown dosyası içe aktar. Denemek için hazır örneklerle de başlayabilirsin.</p>
+              <div className="row center">
+                <button className="btn primary" onClick={() => void onNew()}><Icon name="plus" size={20} /> Yeni metin</button>
+                <button className="btn" onClick={() => void addSamples()}>Örnek metinleri ekle</button>
+              </div>
             </>
           ) : (
-            <p>{view === 'trash' ? 'Çöp kutusu boş.' : 'Aramayla eşleşen metin yok.'}</p>
+            <p>{view === 'trash' ? 'Çöp kutusu boş.' : view === 'fav' ? 'Henüz favori metin yok. Kartlardaki yıldızla ekleyebilirsin.' : 'Aramayla eşleşen metin yok.'}</p>
           )}
         </div>
       )}
 
       <ul className="cards">
-        {visible.map(({ s, words }) => (
-          <li key={s.id} className="card">
-            <div className="card-main">
-              <h2>
-                <button className="link" onClick={() => navigate({ name: 'edit', id: s.id })} disabled={!!s.deletedAt}>
-                  {s.title}
-                </button>
-              </h2>
-              <p className="muted small">
-                {words.toLocaleString('tr')} kelime · ≈ {formatDuration(estimateSeconds(words, wpm))} · {formatDate(s.updatedAt)}
-                {s.folder && <> · 📁 {s.folder}</>}
-                {s.lastPosition && !s.deletedAt && <> · kaldığı yer kayıtlı</>}
-              </p>
-              {s.tags.length > 0 && (
-                <p className="tags">
-                  {s.tags.map((t) => <span key={t} className="tag">{t}</span>)}
+        {visible.map(({ s, words }) => {
+          const secs = estimateSeconds(words, wpm);
+          return (
+            <li key={s.id} className={`card${s.deletedAt ? ' is-trashed' : ''}`}>
+              <div className="slate" aria-label={`Tahmini süre ${formatDuration(secs)}`}>
+                <span className="slate-time">{formatDuration(secs)}</span>
+                <span className="slate-words">{words.toLocaleString('tr')} kelime</span>
+              </div>
+              <div className="card-main">
+                <h2>
+                  <button className="link" onClick={() => navigate({ name: 'edit', id: s.id })} disabled={!!s.deletedAt}>
+                    {s.title}
+                  </button>
+                </h2>
+                <p className="card-meta">
+                  <span>{formatDate(s.updatedAt)}</span>
+                  {s.folder && <span className="meta-folder">{s.folder}</span>}
+                  {s.lastPosition && !s.deletedAt && <span className="meta-resume">Kaldığı yer kayıtlı</span>}
                 </p>
-              )}
-            </div>
-            <div className="card-actions">
-              {s.deletedAt ? (
-                <>
-                  <button className="btn" onClick={() => void patchScript(s.id, { deletedAt: null }).then(load)}>Geri yükle</button>
-                  <button className="btn danger" onClick={() => setConfirmDelete(s)}>Kalıcı sil</button>
-                </>
-              ) : (
-                <>
-                  <button className="btn primary" disabled={words === 0} onClick={() => navigate({ name: 'read', id: s.id })}>▶ Oku</button>
-                  <button className="icon-btn" aria-label={s.favorite ? 'Favoriden çıkar' : 'Favorilere ekle'} aria-pressed={s.favorite} onClick={() => void patchScript(s.id, { favorite: !s.favorite }).then(load)}>
-                    {s.favorite ? '★' : '☆'}
-                  </button>
-                  <button className="icon-btn" aria-label="Çoğalt" title="Çoğalt" onClick={() => void saveScript(duplicateScript(s)).then(load)}>⧉</button>
-                  <button
-                    className="icon-btn"
-                    aria-label="Çöp kutusuna taşı"
-                    title="Çöp kutusuna taşı"
-                    onClick={() => void patchScript(s.id, { deletedAt: Date.now() }).then(() => { void load(); setToast(`“${s.title}” çöp kutusuna taşındı.`); })}
-                  >
-                    🗑
-                  </button>
-                </>
-              )}
-            </div>
-          </li>
-        ))}
+                {s.tags.length > 0 && (
+                  <p className="tags">
+                    {s.tags.map((t) => <span key={t} className="tag">{t}</span>)}
+                  </p>
+                )}
+              </div>
+              <div className="card-actions">
+                {s.deletedAt ? (
+                  <>
+                    <button className="btn" onClick={() => void patchScript(s.id, { deletedAt: null }).then(load)}>Geri yükle</button>
+                    <button className="btn danger" onClick={() => setConfirmDelete(s)}>Kalıcı sil</button>
+                  </>
+                ) : (
+                  <>
+                    <button className={`icon-btn fav${s.favorite ? ' on' : ''}`} aria-label={s.favorite ? 'Favoriden çıkar' : 'Favorilere ekle'} aria-pressed={s.favorite} onClick={() => void patchScript(s.id, { favorite: !s.favorite }).then(load)}>
+                      <Icon name="star" filled={s.favorite} />
+                    </button>
+                    <button className="icon-btn" aria-label="Çoğalt" title="Çoğalt" onClick={() => void saveScript(duplicateScript(s)).then(load)}><Icon name="copy" /></button>
+                    <button
+                      className="icon-btn"
+                      aria-label="Çöp kutusuna taşı"
+                      title="Çöp kutusuna taşı"
+                      onClick={() => void patchScript(s.id, { deletedAt: Date.now() }).then(() => { void load(); setToast(`“${s.title}” çöp kutusuna taşındı.`); })}
+                    >
+                      <Icon name="trash" />
+                    </button>
+                    <button className="btn primary read-btn" disabled={words === 0} onClick={() => navigate({ name: 'read', id: s.id })}><Icon name="play" size={18} /> Oku</button>
+                  </>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       <Dialog

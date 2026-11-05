@@ -9,7 +9,7 @@ test('ekran görüntüleri', async ({ page }) => {
   await page.screenshot({ path: `${dir}/library.png` });
   await page.getByRole('button', { name: 'Örnek — 30 saniyelik Reels' }).click();
   await page.screenshot({ path: `${dir}/editor.png`, fullPage: true });
-  await page.getByRole('button', { name: '▶ Oku' }).click();
+  await page.getByRole('button', { name: 'Oku', exact: true }).click();
   await page.locator('.reader').waitFor();
   await page.keyboard.press('ArrowRight');
   await page.screenshot({ path: `${dir}/reader.png` });

@@ -106,9 +106,9 @@ export function parseBackup(text: string, byteSize = text.length): ParsedBackup 
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new BackupError('Dosya geçerli bir JSON değil. Akış Prompter yedeği seçtiğinizden emin olun.');
+    throw new BackupError('Dosya geçerli bir JSON değil. Teleprompter yedeği seçtiğinizden emin olun.');
   }
-  if (!isObj(raw) || raw.app !== 'akis-prompter') throw new BackupError('Bu dosya bir Akış Prompter yedeği değil.');
+  if (!isObj(raw) || raw.app !== 'akis-prompter') throw new BackupError('Bu dosya bir Teleprompter yedeği değil.');
   const sv = num(raw.schemaVersion, -1);
   if (sv < 1) throw new BackupError('Yedek şema sürümü okunamadı.');
   if (sv > BACKUP_SCHEMA_VERSION)
@@ -208,7 +208,10 @@ export async function applyBackup(data: BackupFile, mode: 'merge' | 'replace', p
   return sum;
 }
 
-export function downloadText(filename: string, text: string, mime = 'application/json'): void {
+/** Tarayıcıda dosya indirir; Android/iOS paketinde paylaşım sayfasını açar. */
+export async function downloadText(filename: string, text: string, mime = 'application/json'): Promise<void> {
+  const { isNative, shareTextFileNative } = await import('../platform/native');
+  if (isNative()) return shareTextFileNative(filename, text);
   const blob = new Blob([text], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

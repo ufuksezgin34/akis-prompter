@@ -94,3 +94,21 @@ describe('yedek', () => {
     expect(p.warnings[0]).toMatch(/1 metin/);
   });
 });
+
+describe('profil göçü', () => {
+  it('eski kişisel profilleri genel adlara taşır, ayarları ve etkin profili korur', async () => {
+    const { getDB } = await import('./db');
+    const { BASE_SETTINGS } = await import('../profiles/defaults');
+    const { getAppSettings } = await import('./repo');
+    const db = await getDB();
+    await db.put('profiles', { id: 'p-tuba-youtube', name: 'Tuba — YouTube', builtin: true, updatedAt: 0, settings: { ...BASE_SETTINGS, speed: 99 } });
+    await db.put('profiles', { id: 'p-tuba-reels', name: 'Benim Reels', builtin: true, updatedAt: 0, settings: BASE_SETTINGS });
+    await db.put('meta', { activeProfileId: 'p-tuba-youtube' }, 'app');
+    const all = await listProfiles();
+    const names = all.map((p) => p.name);
+    expect(names.some((n) => /Tuba|Ufuk/.test(n.replace('Benim Reels', '')))).toBe(false);
+    expect(all.find((p) => p.id === 'p-yatay')?.settings.speed).toBe(99);
+    expect(all.find((p) => p.id === 'p-dikey')?.name).toBe('Benim Reels');
+    expect((await getAppSettings()).activeProfileId).toBe('p-yatay');
+  });
+});

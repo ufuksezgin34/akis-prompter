@@ -20,6 +20,7 @@ import { useAutosave, type SaveStatus } from './useAutosave';
 import { navigate, useStore, announce } from '../ui/store';
 import { Dialog, formatDate } from '../ui/common';
 import { downloadText, safeFilename } from '../backup/backup';
+import { Icon } from '../ui/Icon';
 
 const TYPE_LABEL: Record<BlockType, string> = { heading: 'Bölüm başlığı', speech: 'Konuşma', note: 'Yönetmen notu' };
 
@@ -201,11 +202,11 @@ export function Editor({ id }: { id: string }) {
     <main className="page editor">
       <header className="editor-head">
         <button className="btn ghost" onClick={async () => { await auto.flush(); navigate({ name: 'library' }); }}>
-          ← Metinlerim
+          <Icon name="prevSentence" size={20} /> Metinlerim
         </button>
         <SaveChip status={auto.status} />
         <button className="btn primary" onClick={() => void goRead()} disabled={words === 0} title={words === 0 ? 'Okunacak konuşma metni yok' : undefined}>
-          ▶ Oku
+          <Icon name="play" size={18} /> Oku
         </button>
       </header>
 
@@ -310,19 +311,19 @@ export function Editor({ id }: { id: string }) {
                   splitBlock(i, el?.selectionStart ?? b.text.length);
                 }}
               >
-                ⤓
+                <Icon name="split" size={20} />
               </button>
               <button className="icon-btn" aria-label="Üstteki blokla birleştir" title="Üstteki blokla birleştir" disabled={i === 0} onClick={() => mergeUp(i)}>
-                ⤒
+                <Icon name="merge" size={20} />
               </button>
               <button className="icon-btn" aria-label="Yukarı taşı" disabled={i === 0} onClick={() => move(i, -1)}>
-                ↑
+                <Icon name="up" size={20} />
               </button>
               <button className="icon-btn" aria-label="Aşağı taşı" disabled={i === script.blocks.length - 1} onClick={() => move(i, 1)}>
-                ↓
+                <Icon name="down" size={20} />
               </button>
               <button className="icon-btn danger" aria-label="Bloğu sil" onClick={() => removeBlock(i)}>
-                🗑
+                <Icon name="trash" size={20} />
               </button>
             </div>
             <textarea
@@ -366,10 +367,9 @@ export function Editor({ id }: { id: string }) {
 
 function SaveChip({ status }: { status: SaveStatus }) {
   if (status === 'idle') return <span className="save-chip" />;
-  const icon = status === 'saved' ? '✓' : status === 'saving' ? '…' : '!';
   return (
     <span className={`save-chip s-${status}`} role="status" aria-live="polite">
-      <span aria-hidden="true">{icon}</span> {STATUS_TEXT[status]}
+      <span className="save-dot" aria-hidden="true" /> {STATUS_TEXT[status]}
     </span>
   );
 }
@@ -409,12 +409,12 @@ function Toolbar({ script, canUndo, canRedo, undo, redo, apply }: { script: Scri
 
   return (
     <div className="toolbar" role="toolbar" aria-label="Düzenleme araçları">
-      <button className="btn ghost" onClick={undo} disabled={!canUndo}>↶ Geri al</button>
-      <button className="btn ghost" onClick={redo} disabled={!canRedo}>↷ İleri al</button>
-      <button className="btn ghost" onClick={() => setDialog('find')}>Bul / değiştir</button>
+      <button className="btn ghost" onClick={undo} disabled={!canUndo}><Icon name="undo" size={18} /> Geri al</button>
+      <button className="btn ghost" onClick={redo} disabled={!canRedo}><Icon name="redo" size={18} /> İleri al</button>
+      <button className="btn ghost" onClick={() => setDialog('find')}><Icon name="search" size={18} /> Bul / değiştir</button>
       <button className="btn ghost" onClick={() => setDialog('paste')}>Metin yapıştır</button>
       <details className="menu">
-        <summary className="btn ghost">Diğer araçlar</summary>
+        <summary className="btn ghost"><Icon name="more" size={18} /> Diğer araçlar</summary>
         <div className="menu-list">
           <button className="btn ghost" onClick={() => setDialog('timecode')}>Zaman kodlarını temizle…</button>
           <button className="btn ghost" onClick={() => setDialog('notes')}>[Köşeli] satırları nota çevir…</button>

@@ -1,5 +1,5 @@
 /**
- * Akış Prompter veri modeli.
+ * Teleprompter veri modeli.
  * Metin, güvenli ve taşınabilir bir blok listesi olarak saklanır; ham HTML asla tutulmaz.
  * Satır içi biçim: **kalın** ve ==vurgu== işaretleri (bkz. inline.ts).
  */

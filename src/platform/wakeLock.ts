@@ -1,3 +1,5 @@
+import { isNative, keepAwakeNative } from './native';
+
 /**
  * Screen Wake Lock adaptörü. Desteklenmiyorsa açıkça 'unsupported' döner;
  * ekranın açık kalacağı garanti edilmez. Sistem kilidi kaldırırsa durum 'released' olur,
@@ -19,7 +21,9 @@ export interface WakeLockAdapter {
   onChange(cb: (s: WakeLockStatus) => void): void;
 }
 
+/** Native pakette eklenti, tarayıcıda Screen Wake Lock API. */
 export function createWakeLock(): WakeLockAdapter {
+  if (isNative()) return createNativeWakeLock();
   const nav = navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<SentinelLike> } };
   const supported = typeof nav.wakeLock?.request === 'function';
   let sentinel: SentinelLike | null = null;
@@ -59,6 +63,28 @@ export function createWakeLock(): WakeLockAdapter {
     api.status = s;
     listener(s);
   }
+  return api;
+}
+
+function createNativeWakeLock(): WakeLockAdapter {
+  let listener: (s: WakeLockStatus) => void = () => {};
+  const api: WakeLockAdapter = {
+    supported: true,
+    status: 'inactive',
+    async request() {
+      api.status = (await keepAwakeNative(true)) ? 'active' : 'error';
+      listener(api.status);
+      return api.status;
+    },
+    async release() {
+      await keepAwakeNative(false);
+      api.status = 'inactive';
+      listener(api.status);
+    },
+    onChange(cb) {
+      listener = cb;
+    },
+  };
   return api;
 }
 

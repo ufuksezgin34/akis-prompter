@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getReaderActivity, onReaderActivity } from './readerActivity';
+import { isNative } from '../platform/native';
 
 /**
  * Service worker güncellemesi yalnızca kullanıcıya sunulur; sayfa asla kendiliğinden yenilenmez.
@@ -14,7 +15,8 @@ export function UpdatePrompt() {
   useEffect(() => onReaderActivity((a) => setReading(a !== false)), []);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
+    // Native pakette dosyalar uygulamanın içinde; service worker gerekmez.
+    if (!('serviceWorker' in navigator) || import.meta.env.DEV || isNative()) return;
     let cancelled = false;
     void import('virtual:pwa-register').then(({ registerSW }) => {
       if (cancelled) return;

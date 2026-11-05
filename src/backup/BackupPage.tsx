@@ -28,7 +28,7 @@ export function BackupPage() {
   const exportAll = async () => {
     try {
       const data = await buildBackup();
-      downloadText(backupFilename(), JSON.stringify(data, null, 2));
+      await downloadText(backupFilename(), JSON.stringify(data, null, 2));
       setBackedUpNow(true);
       setToast(`${data.scripts.length} metin ve ${data.profiles.length} profil dışa aktarıldı.`);
     } catch (e) {

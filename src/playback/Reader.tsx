@@ -21,6 +21,8 @@ import { actionForKey, keyLabel } from '../platform/keyboard';
 import { createWakeLock, fullscreen, isStandalone, type WakeLockStatus } from '../platform/wakeLock';
 import { clampSettings } from '../profiles/defaults';
 import { setReaderActive } from '../ui/readerActivity';
+import { Icon } from '../ui/Icon';
+import { isNative } from '../platform/native';
 
 const STATE_LABEL: Record<EngineState, string> = {
   idle: 'Hazır',
@@ -312,7 +314,7 @@ export function Reader({ id }: { id: string }) {
           break;
         case 'fullscreen':
           void fullscreen.toggle().then((ok) => {
-            if (!ok) setNotice(isStandalone() ? 'Tam ekran bu cihazda desteklenmiyor.' : 'Tam ekran desteklenmiyor. Ana ekrana ekleyip uygulama olarak açarsanız tarayıcı çubukları görünmez.');
+            if (!ok) setNotice(isStandalone() || isNative() ? 'Tam ekran bu cihazda desteklenmiyor.' : 'Tam ekran desteklenmiyor. Ana ekrana ekleyip uygulama olarak açarsanız tarayıcı çubukları görünmez.');
           });
           break;
         case 'mirror':
@@ -527,17 +529,18 @@ export function Reader({ id }: { id: string }) {
       <div className="hud" aria-hidden={hidden}>
         {s.showStatus && (
           <span className={`hud-state st-${state}`}>
-            {state === 'playing' ? '●' : state === 'finished' ? '■' : '❚❚'} {STATE_LABEL[state]}
+            <span className="tally" aria-hidden="true" />
+            {state === 'playing' ? 'CANLI' : STATE_LABEL[state]}
           </span>
         )}
         {s.showElapsed && (
           <span title="Geçen aktif süre">
-            ⏱ <span ref={(el) => void (hudRef.current.elapsed = el)}>0:00</span>
+            <span className="hud-k">Geçen</span> <span ref={(el) => void (hudRef.current.elapsed = el)}>0:00</span>
           </span>
         )}
         {s.showRemaining && (
           <span title="Yaklaşık kalan süre (geçerli hızla)">
-            ⌛ <span ref={(el) => void (hudRef.current.remaining = el)}>—</span>
+            <span className="hud-k">Kalan</span> <span ref={(el) => void (hudRef.current.remaining = el)}>—</span>
           </span>
         )}
         {targetSec !== null && <span className="badge">Hedef {formatDuration(targetSec)}</span>}
@@ -556,7 +559,7 @@ export function Reader({ id }: { id: string }) {
         <div className="finished" role="dialog" aria-label="Metin bitti">
           <p>Metin bitti</p>
           <div className="row">
-            <button className="btn primary" onClick={() => { engine.reset(); play(); }}>↺ Baştan başlat</button>
+            <button className="btn primary" onClick={() => { engine.reset(); play(); }}><Icon name="retake" size={18} /> Baştan başlat</button>
             <button className="btn" onClick={() => engine.reset()}>Başa dön</button>
             <button className="btn" onClick={() => void exit()}>Editöre dön</button>
           </div>
@@ -566,7 +569,7 @@ export function Reader({ id }: { id: string }) {
       {notice && (
         <div className="reader-notice" role="status">
           {notice}
-          <button className="icon-btn" aria-label="Bildirimi kapat" onClick={() => setNotice(null)}>✕</button>
+          <button className="icon-btn" aria-label="Bildirimi kapat" onClick={() => setNotice(null)}><Icon name="close" size={18} /></button>
         </div>
       )}
 
@@ -575,26 +578,26 @@ export function Reader({ id }: { id: string }) {
       ) : (
         <nav className="controls" aria-label="Okuma kontrolleri" onPointerMove={showControls} onFocus={showControls}>
           <div className="controls-row">
-            <button className="btn ghost" onClick={() => void exit()} aria-label="Okumadan çık">✕</button>
-            <button className="ctl" onClick={() => run('prevSection')} aria-label="Önceki bölüm">⇤</button>
-            <button className="ctl" onClick={() => run('prevSentence')} aria-label="Önceki cümle">‹</button>
+            <button className="ctl ghost" onClick={() => void exit()} aria-label="Okumadan çık"><Icon name="close" /></button>
+            <button className="ctl" onClick={() => run('prevSection')} aria-label="Önceki bölüm"><Icon name="prevSection" /></button>
+            <button className="ctl" onClick={() => run('prevSentence')} aria-label="Önceki cümle"><Icon name="prevSentence" size={26} /></button>
             <button className="ctl play" onClick={() => run('togglePlay')} disabled={empty} aria-label={state === 'playing' || state === 'countdown' ? 'Duraklat' : 'Oynat'}>
-              {state === 'playing' || state === 'countdown' ? '❚❚' : '▶'}
+              <Icon name={state === 'playing' || state === 'countdown' ? 'pause' : 'play'} size={30} />
             </button>
-            <button className="ctl" onClick={() => run('nextSentence')} aria-label="Sonraki cümle">›</button>
-            <button className="ctl" onClick={() => run('nextSection')} aria-label="Sonraki bölüm">⇥</button>
-            <button className="ctl" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}>⚙</button>
+            <button className="ctl" onClick={() => run('nextSentence')} aria-label="Sonraki cümle"><Icon name="nextSentence" size={26} /></button>
+            <button className="ctl" onClick={() => run('nextSection')} aria-label="Sonraki bölüm"><Icon name="nextSection" /></button>
+            <button className="ctl" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}><Icon name="settings" /></button>
           </div>
           <div className="controls-row">
-            <button className="ctl sm" onClick={() => run('speedDown')} aria-label="Hızı azalt">−</button>
+            <button className="ctl sm" onClick={() => run('speedDown')} aria-label="Hızı azalt"><Icon name="minus" /></button>
             <span className="speed" aria-live="off">
               <strong>{Math.round(s.speed)}</strong> px/s
               {wpmEst !== null && <small title="Metindeki ortalama kelime yoğunluğuna göre tahmin"> ≈ {wpmEst} kelime/dk (tahmini)</small>}
             </span>
-            <button className="ctl sm" onClick={() => run('speedUp')} aria-label="Hızı artır">+</button>
-            <button className="ctl sm text" onClick={() => run('retake')} title={`Tekrar al (${keyLabel(app.keymap.retake[0] ?? '')})`}>↺ Tekrar al</button>
-            <button className="ctl sm text" onClick={back5} title="Gerçek hareket geçmişinden 5 saniye geri">−5 sn</button>
-            <button className="ctl sm text" onClick={() => run('toStart')}>Başa</button>
+            <button className="ctl sm" onClick={() => run('speedUp')} aria-label="Hızı artır"><Icon name="plus" /></button>
+            <button className="ctl sm text" onClick={() => run('retake')} title={`Tekrar al (${keyLabel(app.keymap.retake[0] ?? '')})`}><Icon name="retake" size={18} /> Tekrar al</button>
+            <button className="ctl sm text" onClick={back5} title="Gerçek hareket geçmişinden 5 saniye geri"><Icon name="back5" size={18} /> 5 sn</button>
+            <button className="ctl sm text" onClick={() => run('toStart')}><Icon name="toStart" size={18} /> Başa</button>
             {script?.lastPosition && state === 'idle' && (
               <button
                 className="ctl sm text"
@@ -603,12 +606,12 @@ export function Reader({ id }: { id: string }) {
                   if (l) seekTo(offsetForAnchor(l, script.lastPosition));
                 }}
               >
-                Son konum
+                <Icon name="resume" size={18} /> Son konum
               </button>
             )}
-            <button className="ctl sm text" onClick={() => run('mirror')} aria-pressed={s.mirrorX}>Ayna</button>
-            <button className="ctl sm text" onClick={() => run('fullscreen')}>Tam ekran</button>
-            <button className="ctl sm text" onClick={() => setLocked(true)}>🔒 Kilitle</button>
+            <button className="ctl sm text" onClick={() => run('mirror')} aria-pressed={s.mirrorX}><Icon name="mirror" size={18} /> Ayna</button>
+            <button className="ctl sm text" onClick={() => run('fullscreen')}><Icon name="fullscreen" size={18} /> Tam ekran</button>
+            <button className="ctl sm text" onClick={() => setLocked(true)}><Icon name="lock" size={18} /> Kilitle</button>
           </div>
         </nav>
       )}
@@ -624,7 +627,7 @@ export function Reader({ id }: { id: string }) {
                 ))}
               </select>
             </label>
-            <button className="icon-btn" aria-label="Ayarları kapat" onClick={() => setDrawer(false)}>✕</button>
+            <button className="icon-btn" aria-label="Ayarları kapat" onClick={() => setDrawer(false)}><Icon name="close" /></button>
           </header>
           <TargetDuration
             current={targetSec}
@@ -718,7 +721,7 @@ function UnlockButton({ onUnlock }: { onUnlock: () => void }) {
         }
       }}
     >
-      🔒 {armed ? 'Onaylamak için tekrar' : 'Kilidi açmak için basılı tut'}
+      <Icon name="lock" size={18} /> {armed ? 'Onaylamak için tekrar' : 'Kilidi açmak için basılı tut'}
     </button>
   );
 }

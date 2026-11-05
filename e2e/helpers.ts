@@ -12,7 +12,7 @@ export async function freshStart(page: Page) {
 }
 
 export async function newScriptWithText(page: Page, title: string, text: string) {
-  await page.getByRole('button', { name: '+ Yeni metin' }).click();
+  await page.getByRole('button', { name: 'Yeni metin', exact: true }).first().click();
   await page.getByLabel('Metin adı').fill(title);
   await page.getByRole('button', { name: 'Metin yapıştır' }).click();
   await page.getByLabel('Yapıştırılacak metin').fill(text);

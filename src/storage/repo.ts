@@ -1,7 +1,7 @@
 import { getDB, type SetList, type Take } from './db';
 import type { AppSettings, Block, Profile, Script, ScriptVersion } from '../model/types';
 import { newId } from '../model/text';
-import { builtinProfiles, defaultAppSettings, DEFAULT_KEYMAP } from '../profiles/defaults';
+import { builtinProfiles, defaultAppSettings, DEFAULT_KEYMAP, LEGACY_PROFILE_MAP } from '../profiles/defaults';
 
 export const MAX_VERSIONS = 15;
 const CHANNEL = 'akis-prompter-data';
@@ -132,6 +132,25 @@ export async function listProfiles(): Promise<Profile[]> {
   if (all.length === 0) {
     const tx = db.transaction('profiles', 'readwrite');
     for (const p of builtinProfiles()) await tx.store.put(p);
+    await tx.done;
+    all = await db.getAll('profiles');
+  }
+  // Eski kişisel varsayılan profilleri genel adlara taşı (ayarlar korunur).
+  const legacy = all.filter((p) => LEGACY_PROFILE_MAP[p.id]);
+  if (legacy.length) {
+    const fresh = new Map(builtinProfiles().map((p) => [p.id, p]));
+    const tx = db.transaction(['profiles', 'meta'], 'readwrite');
+    const profiles = tx.objectStore('profiles');
+    const meta = tx.objectStore('meta');
+    const app = (await meta.get('app')) as { activeProfileId?: string } | undefined;
+    for (const p of legacy) {
+      const m = LEGACY_PROFILE_MAP[p.id]!;
+      if (await profiles.get(m.id)) continue;
+      const name = p.name === m.oldName ? fresh.get(m.id)!.name : p.name;
+      await profiles.put({ ...p, id: m.id, name });
+      await profiles.delete(p.id);
+      if (app?.activeProfileId === p.id) await meta.put({ ...app, activeProfileId: m.id }, 'app');
+    }
     await tx.done;
     all = await db.getAll('profiles');
   }
