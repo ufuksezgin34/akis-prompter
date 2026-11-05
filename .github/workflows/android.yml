@@ -17,14 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: İmza şifresi var mı?
+      # Test sürümü anahtarı: şifre depoda açık (android/keystore/TEST_KEY_PASSWORD).
+      # Herkese açık dağıtımdan önce yeni bir anahtar ve ANDROID_KEYSTORE_PASSWORD gizli değeri kullanılmalı.
+      - name: İmza şifresini belirle
         env:
-          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SECRET_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          if [ -z "$PW" ]; then
-            echo "::error::ANDROID_KEYSTORE_PASSWORD gizli değeri eklenmemiş (Settings → Secrets and variables → Actions)."
-            exit 1
-          fi
+          if [ -n "$SECRET_PW" ]; then echo "KS_PW=$SECRET_PW" >> "$GITHUB_ENV"; else echo "KS_PW=$(cat android/keystore/TEST_KEY_PASSWORD)" >> "$GITHUB_ENV"; fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,14 +37,12 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: İmza anahtarını çöz
-        env:
-          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/keystore/release.jks.enc -out "$RUNNER_TEMP/release.jks" -pass env:PW
+        run: openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/keystore/release.jks.enc -out "$RUNNER_TEMP/release.jks" -pass env:KS_PW
       - name: APK derle
         working-directory: android
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ env.KS_PW }}
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
@@ -58,6 +55,6 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk Teleprompter.apk
           rm -f "$RUNNER_TEMP/release.jks"
           gh release create "apk-${{ github.run_number }}" Teleprompter.apk \
-            --title "Teleprompter 1.0.${{ github.run_number }} (Android)" \
-            --notes "Android için kurulum dosyası. Telefonda indirip açın; ilk kurulumda 'bilinmeyen kaynaklardan yükleme' izni istenir." \
+            --title "Teleprompter 1.0.${{ github.run_number }} (Android, test)" \
+            --notes "Android test sürümü. Telefonda indirip açın; ilk kurulumda 'bilinmeyen kaynaklardan yükleme' izni istenir. Not: test anahtarıyla imzalıdır." \
             --latest
