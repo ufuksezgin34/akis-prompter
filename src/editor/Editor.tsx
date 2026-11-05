@@ -44,6 +44,8 @@ export function Editor({ id }: { id: string }) {
   const [externalChanged, setExternalChanged] = useState(false);
   const history = useRef(new EditHistory());
   const baseRevision = useRef(0);
+  const focused = useRef<string | null>(null);
+  const [tagsDraft, setTagsDraft] = useState('');
   const focusAfter = useRef<{ id: string; pos: number } | null>(null);
 
   const auto = useAutosave((saved) => {
@@ -58,6 +60,7 @@ export function Editor({ id }: { id: string }) {
       else {
         baseRevision.current = s.revision;
         setScript(s);
+        setTagsDraft(s.tags.join(', '));
       }
     });
     const off = onExternalChange((m) => {
@@ -121,7 +124,7 @@ export function Editor({ id }: { id: string }) {
     }
   });
 
-  const wpm = activeProfile.settings.measuredWpm ?? DEFAULT_WPM;
+  const wpm = activeProfile.settings.wpm ?? DEFAULT_WPM;
   const words = useMemo(() => (script ? speechWordCount(script.blocks) : 0), [script]);
 
   if (notFound)
@@ -201,13 +204,11 @@ export function Editor({ id }: { id: string }) {
   return (
     <main className="page editor">
       <header className="editor-head">
-        <button className="btn ghost" onClick={async () => { await auto.flush(); navigate({ name: 'library' }); }}>
-          <Icon name="prevSentence" size={20} /> Metinlerim
+        <button className="back-btn" onClick={async () => { await auto.flush(); navigate({ name: 'library' }); }} aria-label="Metinlere dön">
+          <Icon name="prevSentence" size={26} />
         </button>
+        <span className="editor-title">Metni düzenle</span>
         <SaveChip status={auto.status} />
-        <button className="btn primary" onClick={() => void goRead()} disabled={words === 0} title={words === 0 ? 'Okunacak konuşma metni yok' : undefined}>
-          <Icon name="play" size={18} /> Oku
-        </button>
       </header>
 
       {auto.status === 'error' && (
@@ -250,30 +251,32 @@ export function Editor({ id }: { id: string }) {
         />
       )}
 
-      <input
-        className="title-input"
-        aria-label="Metin adı"
-        value={script.title}
-        onChange={(e) => apply({ title: e.target.value }, { coalesce: true })}
-      />
-      <div className="meta-row">
-        <label>
-          Etiketler
-          <input
-            value={script.tags.join(', ')}
-            placeholder="Reels, YouTube…"
-            onChange={(e) => apply({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) }, { coalesce: true, record: false })}
-          />
-        </label>
-        <label>
-          Proje / klasör
-          <input value={script.folder} placeholder="ör. Mutfak serisi" onChange={(e) => apply({ folder: e.target.value }, { coalesce: true, record: false })} />
-        </label>
-        <p className="stats" aria-live="off">
-          {words.toLocaleString('tr')} kelime · ≈ {formatDuration(estimateSeconds(words, wpm))}{' '}
-          <span className="muted">({wpm} kelime/dk {activeProfile.settings.measuredWpm ? 'ölçülmüş' : 'varsayılan tahmin'})</span>
-        </p>
-      </div>
+      <section className="title-card">
+        <input
+          className="title-input"
+          aria-label="Metin adı"
+          value={script.title}
+          onChange={(e) => apply({ title: e.target.value }, { coalesce: true })}
+        />
+        <div className="meta-row">
+          <label className="tag-input">
+            <Icon name="lines" size={18} />
+            <input
+              aria-label="Etiketler (virgülle ayır)"
+              value={tagsDraft}
+              placeholder="Etiket ekle: Reels, YouTube…"
+              onChange={(e) => {
+                setTagsDraft(e.target.value);
+                apply({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) }, { coalesce: true, record: false });
+              }}
+            />
+          </label>
+          <label className="tag-input">
+            <Icon name="library" size={18} />
+            <input aria-label="Proje / klasör" value={script.folder} placeholder="Proje" onChange={(e) => apply({ folder: e.target.value }, { coalesce: true, record: false })} />
+          </label>
+        </div>
+      </section>
 
       <Toolbar
         script={script}
@@ -286,7 +289,7 @@ export function Editor({ id }: { id: string }) {
 
       <ol className="blocks">
         {script.blocks.map((b, i) => (
-          <li key={b.id} className={`block block-${b.type}`}>
+          <li key={b.id} className={`block block-${b.type}`} onFocus={() => (focused.current = b.id)}>
             <div className="block-tools">
               <select aria-label={`Blok ${i + 1} türü`} value={b.type} onChange={(e) => setBlock(b.id, { type: e.target.value as BlockType })}>
                 {(Object.keys(TYPE_LABEL) as BlockType[]).map((t) => (
@@ -295,12 +298,6 @@ export function Editor({ id }: { id: string }) {
                   </option>
                 ))}
               </select>
-              <button className="icon-btn" aria-label="Seçili metni kalın yap" title="Kalın (**metin**)" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection(b.id, '**')}>
-                <b>K</b>
-              </button>
-              <button className="icon-btn" aria-label="Seçili metni vurgula" title="Vurgu (==metin==)" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection(b.id, '==')}>
-                <span className="accent-swatch">V</span>
-              </button>
               <button
                 className="icon-btn"
                 aria-label="İmleçten böl"
@@ -359,8 +356,44 @@ export function Editor({ id }: { id: string }) {
         </div>
       )}
       <p className="hint muted">
-        İpucu: Ctrl/⌘+Enter bloğu böler, satır başında Backspace üstteki blokla birleştirir. **kalın** ve ==vurgu== işaretleri okuma ekranında biçime dönüşür.
+        İpucu: Ctrl/⌘+Enter bloğu böler, satır başında Backspace üstteki blokla birleştirir. Kalın ve vurgu okuma ekranında biçime dönüşür.
       </p>
+
+      <div className="editor-dock">
+        <div className="format-bar" role="toolbar" aria-label="Biçim">
+          <button className="fmt" aria-label="Seçili metni kalın yap" onMouseDown={(e) => e.preventDefault()} onClick={() => focused.current && wrapSelection(focused.current, '**')}>
+            <b>B</b>
+          </button>
+          <button className="fmt" aria-label="Seçili metni vurgula" onMouseDown={(e) => e.preventDefault()} onClick={() => focused.current && wrapSelection(focused.current, '==')}>
+            <Icon name="edit" /><span className="hl-bar" />
+          </button>
+          <button
+            className="fmt"
+            aria-label="Blok türünü değiştir (konuşma, başlık, not)"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              const b = script.blocks.find((x) => x.id === focused.current);
+              if (!b) return;
+              const order: BlockType[] = ['speech', 'heading', 'note'];
+              const next = order[(order.indexOf(b.type) + 1) % order.length]!;
+              setBlock(b.id, { type: next });
+              announce(`Blok türü: ${TYPE_LABEL[next]}`);
+            }}
+          >
+            <span className="aa">Aa</span>
+          </button>
+          <button className="fmt" aria-label="Geri al" disabled={!history.current.canUndo} onClick={undo}>
+            <Icon name="undo" />
+          </button>
+        </div>
+        <p className="stats" aria-live="off">
+          <span><Icon name="file" size={20} /> {words.toLocaleString('tr')} kelime</span>
+          <span><Icon name="clock" size={20} /> Tahmini {formatDuration(estimateSeconds(words, wpm))}</span>
+        </p>
+        <button className="btn primary big block" onClick={() => void goRead()} disabled={words === 0} title={words === 0 ? 'Okunacak konuşma metni yok' : undefined}>
+          <Icon name="play" size={22} /> Prompteri aç
+        </button>
+      </div>
     </main>
   );
 }

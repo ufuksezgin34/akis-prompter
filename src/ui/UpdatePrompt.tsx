@@ -12,7 +12,9 @@ export function UpdatePrompt() {
   const [reading, setReading] = useState(getReaderActivity() !== false);
   const updateRef = useRef<((reload?: boolean) => Promise<void>) | null>(null);
 
-  useEffect(() => onReaderActivity((a) => setReading(a !== false)), []);
+  useEffect(() => {
+    return onReaderActivity((a) => setReading(a !== false));
+  }, []);
 
   useEffect(() => {
     // Native pakette dosyalar uygulamanın içinde; service worker gerekmez.

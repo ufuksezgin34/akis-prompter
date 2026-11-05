@@ -1,16 +1,16 @@
 import type { AppSettings, KeyMap, Profile, ReaderSettings } from '../model/types';
 
 export const BASE_SETTINGS: ReaderSettings = {
-  fontSize: 56,
-  fontWeight: 500,
+  fontSize: 48,
+  fontWeight: 700,
   lineHeight: 1.45,
   paragraphGap: 0.9,
   align: 'left',
-  textColor: '#f4f4f2',
-  bgColor: '#000000',
-  accentColor: '#f5c542',
-  columnWidth: 86,
-  paddingX: 24,
+  textColor: '#f4efe6',
+  bgColor: '#0e1a33',
+  accentColor: '#ff7a35',
+  columnWidth: 100,
+  paddingX: 22,
   paddingY: 0,
   narrowColumn: false,
   cameraPosition: 'none',
@@ -22,6 +22,8 @@ export const BASE_SETTINGS: ReaderSettings = {
   focusBandHeight: 2,
   dimOutside: 0.35,
   speed: 60,
+  wpm: 120,
+  readerTheme: 'navy',
   countdown: 3,
   loop: false,
   showElapsed: true,
@@ -45,10 +47,17 @@ export const SETTING_LIMITS = {
   focusBandHeight: [1, 6],
   dimOutside: [0, 0.9],
   speed: [5, 600],
+  wpm: [40, 300],
 } as const satisfies Partial<Record<keyof ReaderSettings, readonly [number, number]>>;
 
+export const READER_THEMES = {
+  navy: { bgColor: '#0e1a33', textColor: '#f4efe6' },
+  black: { bgColor: '#000000', textColor: '#f4f4f2' },
+  paper: { bgColor: '#f6f1e7', textColor: '#1a1d26' },
+} as const;
+
 export function clampSettings(s: ReaderSettings): ReaderSettings {
-  const out = { ...s };
+  const out = { ...BASE_SETTINGS, ...s };
   for (const [k, [min, max]] of Object.entries(SETTING_LIMITS) as [keyof typeof SETTING_LIMITS, readonly [number, number]][]) {
     const v = Number(out[k]);
     (out[k] as number) = Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : BASE_SETTINGS[k];
@@ -66,10 +75,10 @@ export function builtinProfiles(now = Date.now()): Profile[] {
     settings: { ...BASE_SETTINGS, ...patch },
   });
   return [
-    mk('p-dikey', 'Dikey video (Reels/Shorts)', { fontSize: 64, speed: 70, readingLine: 30, columnWidth: 92 }),
-    mk('p-yatay', 'Yatay video (YouTube)', { fontSize: 54, speed: 55, readingLine: 35 }),
-    mk('p-hizli', 'Hızlı anlatım', { fontSize: 60, speed: 75 }),
-    mk('p-aynali', 'Aynalı Prompter', { mirrorX: true, fontSize: 72, readingLine: 40, showNotes: false }),
+    mk('p-dikey', 'Dikey video (Reels/Shorts)', { fontSize: 52, wpm: 140, readingLine: 30 }),
+    mk('p-yatay', 'Yatay video (YouTube)', { fontSize: 48, wpm: 120, readingLine: 35 }),
+    mk('p-hizli', 'Hızlı anlatım', { fontSize: 48, wpm: 160 }),
+    mk('p-aynali', 'Aynalı prompter', { mirrorX: true, fontSize: 72, readingLine: 40, showNotes: false, readerTheme: 'black', ...READER_THEMES.black }),
     mk('p-masaustu', 'Masaüstü', {
       fontSize: 34,
       narrowColumn: true,
@@ -77,7 +86,7 @@ export function builtinProfiles(now = Date.now()): Profile[] {
       columnWidth: 38,
       readingLine: 18,
       align: 'center',
-      speed: 40,
+      wpm: 110,
     }),
   ];
 }
@@ -125,6 +134,8 @@ export const ACTION_LABELS: Record<keyof KeyMap, string> = {
 export function defaultAppSettings(): AppSettings {
   return {
     activeProfileId: 'p-yatay',
+    workspaceName: '',
+    keepAwake: true,
     keymap: structuredClone(DEFAULT_KEYMAP),
     editorTheme: 'dark',
     onboardingDone: false,

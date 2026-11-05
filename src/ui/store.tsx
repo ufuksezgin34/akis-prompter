@@ -113,19 +113,33 @@ export function useStore(): Store {
 
 /* Basit hash yönlendirme: statik hosting'de sunucu ayarı gerektirmez. */
 export type Route =
+  | { name: 'home' }
   | { name: 'library' }
+  | { name: 'import' }
   | { name: 'edit'; id: string }
   | { name: 'read'; id: string }
   | { name: 'settings' }
+  | { name: 'readingView' }
+  | { name: 'keys' }
+  | { name: 'privacy' }
   | { name: 'backup' };
+
+const SIMPLE: Record<string, Route['name']> = {
+  texts: 'library',
+  import: 'import',
+  settings: 'settings',
+  'reading-view': 'readingView',
+  keys: 'keys',
+  privacy: 'privacy',
+  backup: 'backup',
+};
 
 export function parseRoute(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/');
   if (a === 'edit' && b) return { name: 'edit', id: decodeURIComponent(b) };
   if (a === 'read' && b) return { name: 'read', id: decodeURIComponent(b) };
-  if (a === 'settings') return { name: 'settings' };
-  if (a === 'backup') return { name: 'backup' };
-  return { name: 'library' };
+  const n = a ? SIMPLE[a] : undefined;
+  return n ? ({ name: n } as Route) : { name: 'home' };
 }
 
 export function routeHash(r: Route): string {
@@ -134,10 +148,12 @@ export function routeHash(r: Route): string {
       return `#/edit/${encodeURIComponent(r.id)}`;
     case 'read':
       return `#/read/${encodeURIComponent(r.id)}`;
-    case 'library':
+    case 'home':
       return '#/';
-    default:
-      return `#/${r.name}`;
+    default: {
+      const key = Object.keys(SIMPLE).find((k) => SIMPLE[k] === r.name)!;
+      return `#/${key}`;
+    }
   }
 }
 

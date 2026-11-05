@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { ActionId, ReaderSettings, Script } from '../model/types';
 import { getScript, patchScript, saveScript, withVersion } from '../storage/repo';
 import { formatDuration, speechWordCount } from '../model/text';
-import { ScrollEngine, estimateWpm, speedForTargetDuration, type EngineState } from './engine';
+import { ScrollEngine, speedForTargetDuration, type EngineState } from './engine';
 import {
   anchorAt,
   currentSentenceIndex,
@@ -25,9 +25,9 @@ import { Icon } from '../ui/Icon';
 import { isNative } from '../platform/native';
 
 const STATE_LABEL: Record<EngineState, string> = {
-  idle: 'Hazır',
+  idle: 'Prova',
   countdown: 'Geri sayım',
-  playing: 'Akıyor',
+  playing: 'Canlı',
   paused: 'Duraklatıldı',
   finished: 'Bitti',
 };
@@ -65,6 +65,11 @@ export function Reader({ id }: { id: string }) {
   sRef.current = s;
 
   const engine = useMemo(() => new ScrollEngine(), []);
+  const words = useMemo(() => (script ? speechWordCount(script.blocks) : 0), [script]);
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
+  /** Ölçülmüş düzende kelime başına düşen kaydırma mesafesi (px). Kelime/dk → px/s çevirisi için. */
+  const pxPerWord = useRef(0);
   const wakeLock = useMemo(() => createWakeLock(), []);
 
   /* --- dar ekran uyarısı: satır başına çok az karakter sığıyorsa bir kez bildir --- */
@@ -73,7 +78,7 @@ export function Reader({ id }: { id: string }) {
     const st = stageRef.current;
     if (!st || narrowWarned.current) return;
     const colPx = (st.clientWidth * s.columnWidth) / 100 - 2 * s.paddingX;
-    if (colPx / (s.fontSize * 0.55) < 12) {
+    if (colPx / (s.fontSize * 0.55) < 8) {
       narrowWarned.current = true;
       setNotice('Bu ekran için yazı boyutu büyük; satıra çok az kelime sığıyor. ⚙ ile yazı boyutunu küçültebilirsiniz.');
     }
@@ -102,7 +107,7 @@ export function Reader({ id }: { id: string }) {
         persistTimer.current = window.setTimeout(() => void saveProfile({ ...activeProfile, settings: next }), 400);
         return next;
       });
-      if ('speed' in patch && targetSec !== null) {
+      if ('wpm' in patch && targetSec !== null) {
         setTargetSec(null);
         setNotice('Hızı elle değiştirdiniz; hedef süre artık garanti edilmiyor.');
       }
@@ -164,11 +169,18 @@ export function Reader({ id }: { id: string }) {
     });
   }, [engine, applyOffset, savePosition]);
 
-  useEffect(() => {
-    engine.setSpeed(s.speed);
-    engine.loop = s.loop;
+  /** Kelime/dk → px/s: metnin gerçek yerleşimindeki ortalama kelime yoğunluğuna göre. */
+  const syncSpeed = useCallback(() => {
+    const ppw = pxPerWord.current;
+    const px = ppw > 0 ? (sRef.current.wpm / 60) * ppw : sRef.current.speed;
+    engine.setSpeed(px);
     updateHud(engine.offset, true);
-  }, [engine, s.speed, s.loop, updateHud]);
+  }, [engine, updateHud]);
+
+  useEffect(() => {
+    engine.loop = s.loop;
+    syncSpeed();
+  }, [engine, s.wpm, s.loop, syncSpeed]);
 
   /* --- ölçüm: yalnızca yerleşim değişince --- */
   const remeasure = useCallback(() => {
@@ -182,12 +194,13 @@ export function Reader({ id }: { id: string }) {
     content.style.paddingBottom = `${Math.max(0, stage.clientHeight - lineY)}px`;
     const lay = measure(content, lineY);
     layoutRef.current = lay;
+    pxPerWord.current = wordsRef.current > 0 ? lay.maxOffset / wordsRef.current : 0;
     engine.setMaxOffset(lay.maxOffset);
     const restored = offsetForAnchor(lay, anchor);
     if (restored !== null) engine.seek(restored);
     else applyOffset(engine.offset);
-    updateHud(engine.offset, true);
-  }, [engine, applyOffset, updateHud]);
+    syncSpeed();
+  }, [engine, applyOffset, syncSpeed]);
 
   useLayoutEffect(() => {
     remeasure();
@@ -217,11 +230,11 @@ export function Reader({ id }: { id: string }) {
     const lay = layoutRef.current;
     if (!lay) return;
     const sp = speedForTargetDuration(lay.maxOffset - engine.offset, targetSec);
-    setS((cur) => ({ ...cur, speed: Math.min(600, Math.max(5, sp)) }));
+    const ppw = pxPerWord.current;
+    if (ppw > 0) setS((cur) => ({ ...cur, wpm: Math.min(300, Math.max(40, Math.round((sp * 60) / ppw))) }));
   }, [targetSec, engine, s.fontSize, s.columnWidth, s.lineHeight, s.paragraphGap, s.paddingX]);
 
   /* --- kontrol eylemleri --- */
-  const words = useMemo(() => (script ? speechWordCount(script.blocks) : 0), [script]);
   const empty = words === 0;
 
   const play = useCallback(
@@ -236,9 +249,9 @@ export function Reader({ id }: { id: string }) {
       }
       setNotice(null);
       engine.play(countdownSec);
-      void wakeLock.request();
+      if (app.keepAwake) void wakeLock.request();
     },
-    [empty, engine, script, wakeLock],
+    [empty, engine, script, wakeLock, app.keepAwake],
   );
 
   const seekTo = useCallback(
@@ -258,20 +271,25 @@ export function Reader({ id }: { id: string }) {
     play(3);
   }, [engine, play]);
 
-  const back5 = useCallback(() => {
-    engine.pause();
-    if (!engine.rewindActiveMs(5000)) {
-      const lay = layoutRef.current;
-      if (lay) engine.seek(prevSentenceOffset(lay, engine.offset));
-      setNotice('Hareket geçmişi yok; bir önceki cümleye dönüldü.');
-    }
-  }, [engine]);
+  /** ±sn: geri sarma gerçek hareket geçmişini kullanır; yoksa cümle başına döner ve bunu söyler. */
+  const skip = useCallback(
+    (sec: number) => {
+      if (sec < 0) {
+        if (!engine.rewindActiveMs(-sec * 1000)) {
+          const lay = layoutRef.current;
+          if (lay) engine.seek(prevSentenceOffset(lay, engine.offset));
+          setNotice('Hareket geçmişi yok; bir önceki cümleye dönüldü.');
+        }
+      } else {
+        engine.seek(engine.offset + engine.speed * sec);
+      }
+    },
+    [engine],
+  );
 
   const changeSpeed = useCallback(
     (dir: 1 | -1) => {
-      const cur = sRef.current.speed;
-      const step = Math.max(2, Math.round(cur * 0.08));
-      setSettings({ speed: cur + dir * step });
+      setSettings({ wpm: sRef.current.wpm + dir * 5 });
     },
     [setSettings],
   );
@@ -455,19 +473,17 @@ export function Reader({ id }: { id: string }) {
     return (
       <main className="page">
         <p>Metin bulunamadı.</p>
-        <button className="btn" onClick={() => navigate({ name: 'library' })}>Metinlerime dön</button>
+        <button className="btn" onClick={() => navigate({ name: 'library' })}>Metinlere dön</button>
       </main>
     );
 
-  const lay = layoutRef.current;
-  const wpmEst = lay ? estimateWpm(s.speed, words, lay.maxOffset) : null;
   const lineHeightPx = s.fontSize * s.lineHeight;
   const lineY = `${s.readingLine}%`;
   const bandH = lineHeightPx * s.focusBandHeight;
   const columnStyle: CSSProperties = {
     width: s.narrowColumn ? `min(${s.columnWidth}%, 34em)` : `${s.columnWidth}%`,
-    marginLeft: s.cameraPosition === 'left' ? s.paddingX : s.cameraPosition === 'right' ? 'auto' : 'auto',
-    marginRight: s.cameraPosition === 'right' ? s.paddingX : s.cameraPosition === 'left' ? 'auto' : 'auto',
+    marginLeft: s.cameraPosition === 'left' ? s.paddingX : 'auto',
+    marginRight: s.cameraPosition === 'right' ? s.paddingX : 'auto',
     paddingLeft: s.paddingX,
     paddingRight: s.paddingX,
   };
@@ -484,9 +500,17 @@ export function Reader({ id }: { id: string }) {
   } as CSSProperties;
 
   const hidden = !controlsVisible && !drawer && state === 'playing';
+  const playing = state === 'playing' || state === 'countdown';
+
+  const quick = (label: string, icon: Parameters<typeof Icon>[0]['name'], fn: () => void) => (
+    <button className="quick" onClick={fn}>
+      <Icon name={icon} size={20} />
+      <span>{label}</span>
+    </button>
+  );
 
   return (
-    <div className={`reader${hidden ? ' controls-hidden' : ''}${locked ? ' is-locked' : ''}`} style={rootStyle} data-state={state}>
+    <div className={`reader${hidden ? ' controls-hidden' : ''}${locked ? ' is-locked' : ''}`} style={rootStyle} data-state={state} data-theme-r={s.readerTheme}>
       <div
         ref={stageRef}
         className="stage"
@@ -499,6 +523,7 @@ export function Reader({ id }: { id: string }) {
       >
         {/* Yalnızca metin katmanı aynalanır; kontroller okunaklı kalır. */}
         <div className="text-layer" style={{ transform: `scale(${s.mirrorX ? -1 : 1}, ${s.flipY ? -1 : 1})` }} data-testid="text-layer">
+          {s.focusBand && <div className="band" style={{ top: lineY, height: bandH }} aria-hidden="true" />}
           <div ref={contentRef} className="content" data-testid="content">
             <div className="column" style={columnStyle}>
               {script && <ReaderText blocks={script.blocks} showNotes={s.showNotes} />}
@@ -506,43 +531,35 @@ export function Reader({ id }: { id: string }) {
           </div>
           {s.focusBand && (
             <>
-              <div className="dim dim-top" style={{ height: `calc(${lineY} - ${lineHeightPx * 0.15}px)`, opacity: s.dimOutside }} />
-              <div className="dim dim-bottom" style={{ top: `calc(${lineY} + ${bandH + lineHeightPx * 0.15}px)`, opacity: s.dimOutside }} />
+              <div className="dim dim-top" style={{ height: `calc(${lineY} - ${lineHeightPx * 0.1}px)`, opacity: s.dimOutside }} />
+              <div className="dim dim-bottom" style={{ top: `calc(${lineY} + ${bandH + lineHeightPx * 0.1}px)`, opacity: s.dimOutside * 0.45 }} />
             </>
           )}
           {s.showReadingMarker && (
             <div className="marker" style={{ top: `calc(${lineY} + ${lineHeightPx / 2}px)` }} aria-hidden="true">
-              <span className="marker-arrow">▶</span>
-              <span className="marker-line" />
+              <span className="marker-arrow" />
             </div>
           )}
           {s.cameraPosition !== 'none' && <div className={`cam-dot cam-${s.cameraPosition}`} aria-hidden="true" title="Kamera" />}
         </div>
       </div>
 
-      {s.showProgress && (
-        <div className="progress" aria-hidden="true">
-          <div className="progress-fill" ref={(el) => void (hudRef.current.progress = el)} />
+      <header className="r-top" aria-hidden={hidden}>
+        <button className="r-btn" onClick={() => void exit()} aria-label="Okumadan çık"><Icon name="close" /></button>
+        <div className="r-status">
+          {s.showStatus && (
+            <span className={`r-pill st-${state}`}>
+              <span className="tally" aria-hidden="true" />
+              {STATE_LABEL[state]}
+            </span>
+          )}
+          {s.showElapsed && (
+            <span className="r-time" title="Geçen aktif süre" ref={(el) => void (hudRef.current.elapsed = el)}>0:00</span>
+          )}
         </div>
-      )}
-
-      <div className="hud" aria-hidden={hidden}>
-        {s.showStatus && (
-          <span className={`hud-state st-${state}`}>
-            <span className="tally" aria-hidden="true" />
-            {state === 'playing' ? 'CANLI' : STATE_LABEL[state]}
-          </span>
-        )}
-        {s.showElapsed && (
-          <span title="Geçen aktif süre">
-            <span className="hud-k">Geçen</span> <span ref={(el) => void (hudRef.current.elapsed = el)}>0:00</span>
-          </span>
-        )}
-        {s.showRemaining && (
-          <span title="Yaklaşık kalan süre (geçerli hızla)">
-            <span className="hud-k">Kalan</span> <span ref={(el) => void (hudRef.current.remaining = el)}>—</span>
-          </span>
-        )}
+        <button className="r-btn" onClick={() => setDrawer((d) => !d)} aria-label="Diğer seçenekler" aria-expanded={drawer}><Icon name="more" /></button>
+      </header>
+      <div className="hud-badges">
         {targetSec !== null && <span className="badge">Hedef {formatDuration(targetSec)}</span>}
         {rehearsal && <span className="badge rec">Prova ölçülüyor</span>}
         {wake === 'released' && <span className="badge warn">Ekran kilidi engeli kalktı</span>}
@@ -550,15 +567,15 @@ export function Reader({ id }: { id: string }) {
 
       {state === 'countdown' && countdown > 0 && (
         <div className="countdown" role="timer" aria-live="assertive">
-          <span>{countdown}</span>
-          <button className="btn" onClick={() => engine.pause()}>İptal</button>
+          <span className="count-ring">{countdown}</span>
+          <button className="btn pill" onClick={() => engine.pause()}>İptal</button>
         </div>
       )}
 
       {state === 'finished' && (
         <div className="finished" role="dialog" aria-label="Metin bitti">
           <p>Metin bitti</p>
-          <div className="row">
+          <div className="row center">
             <button className="btn primary" onClick={() => { engine.reset(); play(); }}><Icon name="retake" size={18} /> Baştan başlat</button>
             <button className="btn" onClick={() => engine.reset()}>Başa dön</button>
             <button className="btn" onClick={() => void exit()}>Editöre dön</button>
@@ -577,41 +594,46 @@ export function Reader({ id }: { id: string }) {
         <UnlockButton onUnlock={() => setLocked(false)} />
       ) : (
         <nav className="controls" aria-label="Okuma kontrolleri" onPointerMove={showControls} onFocus={showControls}>
-          <div className="controls-row">
-            <button className="ctl ghost" onClick={() => void exit()} aria-label="Okumadan çık"><Icon name="close" /></button>
-            <button className="ctl" onClick={() => run('prevSection')} aria-label="Önceki bölüm"><Icon name="prevSection" /></button>
-            <button className="ctl" onClick={() => run('prevSentence')} aria-label="Önceki cümle"><Icon name="prevSentence" size={26} /></button>
-            <button className="ctl play" onClick={() => run('togglePlay')} disabled={empty} aria-label={state === 'playing' || state === 'countdown' ? 'Duraklat' : 'Oynat'}>
-              <Icon name={state === 'playing' || state === 'countdown' ? 'pause' : 'play'} size={30} />
-            </button>
-            <button className="ctl" onClick={() => run('nextSentence')} aria-label="Sonraki cümle"><Icon name="nextSentence" size={26} /></button>
-            <button className="ctl" onClick={() => run('nextSection')} aria-label="Sonraki bölüm"><Icon name="nextSection" /></button>
-            <button className="ctl" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}><Icon name="settings" /></button>
-          </div>
-          <div className="controls-row">
-            <button className="ctl sm" onClick={() => run('speedDown')} aria-label="Hızı azalt"><Icon name="minus" /></button>
-            <span className="speed" aria-live="off">
-              <strong>{Math.round(s.speed)}</strong> px/s
-              {wpmEst !== null && <small title="Metindeki ortalama kelime yoğunluğuna göre tahmin"> ≈ {wpmEst} kelime/dk (tahmini)</small>}
+          {s.showProgress && (
+            <div className="progress" aria-hidden="true">
+              <div className="progress-fill" ref={(el) => void (hudRef.current.progress = el)} />
+            </div>
+          )}
+          <div className="speed-row">
+            <label htmlFor="speed-wpm">Hız</label>
+            <span className="speed-val">
+              {s.showRemaining && (
+                <span className="remain" title="Yaklaşık kalan süre (geçerli hızla)">
+                  Kalan <span ref={(el) => void (hudRef.current.remaining = el)}>—</span>
+                </span>
+              )}
+              <strong>{s.wpm}</strong> kelime/dk
             </span>
-            <button className="ctl sm" onClick={() => run('speedUp')} aria-label="Hızı artır"><Icon name="plus" /></button>
-            <button className="ctl sm text" onClick={() => run('retake')} title={`Tekrar al (${keyLabel(app.keymap.retake[0] ?? '')})`}><Icon name="retake" size={18} /> Tekrar al</button>
-            <button className="ctl sm text" onClick={back5} title="Gerçek hareket geçmişinden 5 saniye geri"><Icon name="back5" size={18} /> 5 sn</button>
-            <button className="ctl sm text" onClick={() => run('toStart')}><Icon name="toStart" size={18} /> Başa</button>
-            {script?.lastPosition && state === 'idle' && (
-              <button
-                className="ctl sm text"
-                onClick={() => {
-                  const l = layoutRef.current;
-                  if (l) seekTo(offsetForAnchor(l, script.lastPosition));
-                }}
-              >
-                <Icon name="resume" size={18} /> Son konum
-              </button>
-            )}
-            <button className="ctl sm text" onClick={() => run('mirror')} aria-pressed={s.mirrorX}><Icon name="mirror" size={18} /> Ayna</button>
-            <button className="ctl sm text" onClick={() => run('fullscreen')}><Icon name="fullscreen" size={18} /> Tam ekran</button>
-            <button className="ctl sm text" onClick={() => setLocked(true)}><Icon name="lock" size={18} /> Kilitle</button>
+          </div>
+          <input
+            id="speed-wpm"
+            className="range"
+            type="range"
+            min={40}
+            max={300}
+            step={5}
+            value={s.wpm}
+            onChange={(e) => setSettings({ wpm: Number(e.target.value) })}
+            aria-valuetext={`${s.wpm} kelime/dk`}
+            style={{ '--pct': `${((s.wpm - 40) / 260) * 100}%` } as CSSProperties}
+          />
+          <div className="transport">
+            <button className="ctl round" onClick={() => skip(-10)} aria-label="10 saniye geri"><span className="skip">10</span><Icon name="retake" size={34} /></button>
+            <button className="ctl play" onClick={() => run('togglePlay')} disabled={empty} aria-label={playing ? 'Duraklat' : 'Oynat'}>
+              <Icon name={playing ? 'pause' : 'play'} size={34} />
+            </button>
+            <button className="ctl round fwd" onClick={() => skip(10)} aria-label="10 saniye ileri"><span className="skip">10</span><Icon name="retake" size={34} /></button>
+          </div>
+          <div className="tools">
+            <button className="tool" onClick={() => setDrawer((d) => !d)} aria-label="Okuma ayarları" aria-expanded={drawer}><span className="aa">Aa</span></button>
+            <button className="tool" onClick={() => run('mirror')} aria-pressed={s.mirrorX} aria-label="Ayna"><Icon name="mirror" /></button>
+            <button className="tool" onClick={() => run('retake')} aria-label="Tekrar al" title={`Tekrar al (${keyLabel(app.keymap.retake[0] ?? '')})`}><Icon name="retake" /></button>
+            <button className="tool" onClick={() => setLocked(true)} aria-label="Kilitle"><Icon name="lock" /></button>
           </div>
         </nav>
       )}
@@ -619,16 +641,30 @@ export function Reader({ id }: { id: string }) {
       {drawer && !locked && (
         <aside className="drawer" aria-label="Okuma ayarları">
           <header className="drawer-head">
-            <label className="field-inline">
-              Profil
-              <select value={activeProfile.id} onChange={(e) => void updateApp({ activeProfileId: e.target.value })}>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </label>
+            <strong>Okuma</strong>
             <button className="icon-btn" aria-label="Ayarları kapat" onClick={() => setDrawer(false)}><Icon name="close" /></button>
           </header>
+          <div className="quick-grid">
+            {quick('Önceki cümle', 'prevSentence', () => run('prevSentence'))}
+            {quick('Sonraki cümle', 'nextSentence', () => run('nextSentence'))}
+            {quick('Önceki bölüm', 'prevSection', () => run('prevSection'))}
+            {quick('Sonraki bölüm', 'nextSection', () => run('nextSection'))}
+            {quick('Başa dön', 'toStart', () => run('toStart'))}
+            {script?.lastPosition &&
+              quick('Son konum', 'resume', () => {
+                const l = layoutRef.current;
+                if (l) seekTo(offsetForAnchor(l, script.lastPosition));
+              })}
+            {quick('Tam ekran', 'fullscreen', () => run('fullscreen'))}
+          </div>
+          <label className="field-inline">
+            Profil
+            <select value={activeProfile.id} onChange={(e) => void updateApp({ activeProfileId: e.target.value })}>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
           <TargetDuration
             current={targetSec}
             onSet={(v) => {
@@ -637,9 +673,9 @@ export function Reader({ id }: { id: string }) {
             }}
           />
           <section className="rehearsal">
-            <button className="btn" onClick={toggleRehearsal}>{rehearsal ? 'Ölçümü bitir' : 'Prova hızını ölç'}</button>
+            <button className="btn" onClick={toggleRehearsal}>{rehearsal ? 'Ölçümü bitir' : 'Prova süresini ölç'}</button>
             <p className="muted small">
-              Kişisel hız: {s.measuredWpm ? `${s.measuredWpm} kelime/dk (ölçülmüş, yaklaşık)` : 'henüz ölçülmedi — tahminler varsayılan 140 kelime/dk kullanır'}
+              Ölçülen okuma: {s.measuredWpm ? `${s.measuredWpm} kelime/dk (yaklaşık)` : 'henüz ölçülmedi'} · Kaydırma: {Math.round(engine.speed)} px/s
             </p>
           </section>
           <p className="muted small">

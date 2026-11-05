@@ -1,7 +1,7 @@
 import { getDB, type SetList, type Take } from './db';
 import type { AppSettings, Block, Profile, Script, ScriptVersion } from '../model/types';
 import { newId } from '../model/text';
-import { builtinProfiles, defaultAppSettings, DEFAULT_KEYMAP, LEGACY_PROFILE_MAP } from '../profiles/defaults';
+import { builtinProfiles, clampSettings, defaultAppSettings, DEFAULT_KEYMAP, LEGACY_PROFILE_MAP } from '../profiles/defaults';
 
 export const MAX_VERSIONS = 15;
 const CHANNEL = 'akis-prompter-data';
@@ -154,7 +154,8 @@ export async function listProfiles(): Promise<Profile[]> {
     await tx.done;
     all = await db.getAll('profiles');
   }
-  return all;
+  // Eski sürümlerden gelen profillerde yeni alanları varsayılanla doldur.
+  return all.map((p) => ({ ...p, settings: clampSettings(p.settings) }));
 }
 
 export async function putProfile(p: Profile): Promise<void> {

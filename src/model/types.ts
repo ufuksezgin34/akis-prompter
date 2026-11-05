@@ -69,7 +69,10 @@ export interface ReaderSettings {
   focusBand: boolean;
   focusBandHeight: number; // satır sayısı 1–6
   dimOutside: number; // 0–0.9
-  speed: number; // px/s
+  speed: number; // px/s (iç değer; kelime/dk'dan ekrandaki gerçek düzene göre hesaplanır)
+  /** Kullanıcının seçtiği hız (kelime/dk). Okuma ekranı bunu metnin ölçülmüş kelime yoğunluğuyla px/s'ye çevirir. */
+  wpm: number;
+  readerTheme: 'navy' | 'black' | 'paper';
   countdown: CountdownSeconds;
   loop: boolean;
   showElapsed: boolean;
@@ -108,6 +111,9 @@ export type KeyMap = Record<ActionId, string[]>;
 
 export interface AppSettings {
   activeProfileId: string;
+  /** Ayarlar ekranında görünen isteğe bağlı çalışma alanı adı (yalnızca bu cihazda). */
+  workspaceName: string;
+  keepAwake: boolean;
   keymap: KeyMap;
   editorTheme: 'system' | 'light' | 'dark';
   onboardingDone: boolean;

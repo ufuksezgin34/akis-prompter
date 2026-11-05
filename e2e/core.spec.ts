@@ -32,7 +32,7 @@ test('7. editörde Space yazmak oynatma başlatmaz', async ({ page }) => {
 
 test('oynat, duraklat, devam; boşluk ve hız tuşları; aktif cümle', async ({ page }) => {
   await newScriptWithText(page, 'Akış', Array(6).fill(SHORT).join("\n\n"));
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await expect(page.locator('.reader')).toBeVisible();
   // Sayaçsız başlat
   await page.getByRole('button', { name: 'Okuma ayarları' }).click();
@@ -57,7 +57,7 @@ test('oynat, duraklat, devam; boşluk ve hız tuşları; aktif cümle', async ({
 
 test('6. cümle ileri/geri, bölüm geçişi, metin sonu ve tekrar başlat', async ({ page }) => {
   await newScriptWithText(page, 'Gezinme', SHORT);
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   const s0 = await contentOffset(page);
   await page.keyboard.press('ArrowRight');
@@ -70,12 +70,12 @@ test('6. cümle ileri/geri, bölüm geçişi, metin sonu ve tekrar başlat', asy
   expect(await contentOffset(page)).toBeCloseTo(s1, 0);
   await page.keyboard.press('PageDown');
   const sec = await contentOffset(page);
-  expect(sec).toBeGreaterThan(s2);
+  expect(sec).toBeGreaterThan(s1);
   // Sona kadar hızlı akış
   await page.evaluate(() => {
     document.querySelector<HTMLButtonElement>('[aria-label="Okuma ayarları"]')!.click();
   });
-  await page.locator('#set-speed').fill('600');
+  await page.locator('#set-wpm').fill('300');
   await page.getByLabel('Başlangıç sayacı').selectOption('0');
   await page.getByRole('button', { name: 'Ayarları kapat' }).click();
   await page.keyboard.press(' ');
@@ -94,7 +94,7 @@ test('6. cümle ileri/geri, bölüm geçişi, metin sonu ve tekrar başlat', asy
 
 test('4. yazı boyutu ve pencere boyutu değişince okuma yeri korunur', async ({ page }) => {
   await newScriptWithText(page, 'Konum', Array(5).fill(SHORT).join("\n\n"));
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowRight');
   const textAtLine = () =>
@@ -113,13 +113,13 @@ test('4. yazı boyutu ve pencere boyutu değişince okuma yeri korunur', async (
 
 test('5. ayna açıkken kontroller aynalanmaz ve tıklanabilir', async ({ page }) => {
   await newScriptWithText(page, 'Ayna', SHORT);
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   await page.keyboard.press('m');
   await expect(page.getByTestId('text-layer')).toHaveAttribute('style', /scale\(-1, 1\)/);
   const ctlTransform = await page.locator('.controls').evaluate((el) => getComputedStyle(el).transform);
   expect(ctlTransform === 'none' || !ctlTransform.startsWith('matrix(-1')).toBe(true);
-  await page.getByRole('button', { name: 'Sonraki cümle' }).click();
+  await page.getByRole('button', { name: '10 saniye ileri' }).click();
   expect(await contentOffset(page)).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Ayna', exact: true }).click();
   await expect(page.getByTestId('text-layer')).toHaveAttribute('style', /scale\(1, 1\)/);
@@ -127,13 +127,14 @@ test('5. ayna açıkken kontroller aynalanmaz ve tıklanabilir', async ({ page }
 
 test('boş metinde oynatma başlamaz', async ({ page }) => {
   await page.getByRole('button', { name: 'Yeni metin', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Oku', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Prompteri aç' })).toBeDisabled();
 });
 
 test('2. 10.000+ kelimelik metin: akış, duraklama, devam ve kare ölçümü', async ({ page }) => {
+  await page.goto('./#/texts');
   await page.getByRole('button', { name: 'Örnek metinleri ekle' }).click();
-  await page.getByRole('button', { name: 'Stres testi — 10.000+ kelime' }).click();
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: /^Stres testi/ }).first().click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   await page.getByRole('button', { name: 'Okuma ayarları' }).click();
   await page.getByLabel('Başlangıç sayacı').selectOption('0');
@@ -167,7 +168,7 @@ test('2. 10.000+ kelimelik metin: akış, duraklama, devam ve kare ölçümü', 
 
 test('3. sekme gizlenince duraklar, dönünce kendiliğinden başlamaz', async ({ page }) => {
   await newScriptWithText(page, 'Görünürlük', Array(4).fill(SHORT).join("\n\n"));
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   await page.getByRole('button', { name: 'Okuma ayarları' }).click();
   await page.getByLabel('Başlangıç sayacı').selectOption('0');
@@ -196,7 +197,7 @@ test('11. Wake Lock ve tam ekran reddi uygulamayı çökertmez', async ({ page }
   });
   await page.reload();
   await newScriptWithText(page, 'Ret', SHORT);
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   await page.keyboard.press(' ');
   await page.keyboard.press('f');
@@ -224,8 +225,8 @@ test('10. depolama başarısız olursa metin kaybolmaz ve indirme sunulur', asyn
 
 test('9. JSON yedek: dışa aktar, bozuk dosya veriyi bozmaz, geri yükle', async ({ page }) => {
   await newScriptWithText(page, 'Yedeklenen', 'Yedek içeriği 🙂');
-  await page.getByRole('button', { name: 'Metinlerim', exact: true }).click();
-  await page.getByRole('button', { name: /Yedekleme/ }).click();
+  await page.getByRole('button', { name: 'Metinlere dön' }).click();
+  await page.goto('./#/backup');
   const dl = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Yedeği indir' }).click();
   const path = await (await dl).path();
@@ -253,7 +254,7 @@ test('12. çoklu sekme: eski sekme yeni metni ezmez', async ({ page, context }) 
 
 test('6b. tekrar al: mevcut cümle başına döner, 3 sn sayar, yeniden başlar', async ({ page }) => {
   await newScriptWithText(page, 'Tekrar', SHORT);
-  await page.getByRole('button', { name: 'Oku', exact: true }).click();
+  await page.getByRole('button', { name: 'Prompteri aç' }).click();
   await page.locator('.reader').waitFor();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');

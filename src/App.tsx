@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { StoreProvider, useRoute, useStore, navigate, type Route } from './ui/store';
+import { Home } from './home/Home';
 import { Library } from './library/Library';
 import { Editor } from './editor/Editor';
 import { Reader } from './playback/Reader';
@@ -7,26 +8,32 @@ import { Onboarding } from './ui/Onboarding';
 import { UpdatePrompt } from './ui/UpdatePrompt';
 import { Icon, type IconName } from './ui/Icon';
 
-const SettingsPage = lazy(() => import('./profiles/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const ImportPage = lazy(() => import('./import/ImportPage').then((m) => ({ default: m.ImportPage })));
+const settings = () => import('./profiles/SettingsPage');
+const SettingsPage = lazy(() => settings().then((m) => ({ default: m.SettingsPage })));
+const ReadingViewPage = lazy(() => settings().then((m) => ({ default: m.ReadingViewPage })));
+const KeysPage = lazy(() => settings().then((m) => ({ default: m.KeysPage })));
+const PrivacyPage = lazy(() => settings().then((m) => ({ default: m.PrivacyPage })));
 const BackupPage = lazy(() => import('./backup/BackupPage').then((m) => ({ default: m.BackupPage })));
 
-function Nav({ route }: { route: Route }) {
-  const items: { r: Route; label: string; icon: IconName }[] = [
-    { r: { name: 'library' }, label: 'Metinlerim', icon: 'library' },
-    { r: { name: 'settings' }, label: 'Ayarlar', icon: 'settings' },
-    { r: { name: 'backup' }, label: 'Yedekleme', icon: 'backup' },
-  ];
+const TABS: { r: Route; label: string; icon: IconName; match: Route['name'][] }[] = [
+  { r: { name: 'home' }, label: 'Ana sayfa', icon: 'home', match: ['home', 'import'] },
+  { r: { name: 'library' }, label: 'Metinler', icon: 'file', match: ['library'] },
+  { r: { name: 'settings' }, label: 'Ayarlar', icon: 'settings', match: ['settings', 'readingView', 'keys', 'privacy', 'backup'] },
+];
+
+function TabBar({ route }: { route: Route }) {
   return (
-    <nav className="app-nav" aria-label="Ana menü">
-      <span className="brand" aria-hidden="true">
-        <span className="brand-mark" />
-        Teleprompter
-      </span>
-      {items.map((i) => (
-        <button key={i.r.name} aria-current={route.name === i.r.name ? 'page' : undefined} onClick={() => navigate(i.r)}>
-          <Icon name={i.icon} /> <span>{i.label}</span>
-        </button>
-      ))}
+    <nav className="tabbar" aria-label="Ana menü">
+      {TABS.map((t) => {
+        const active = t.match.includes(route.name);
+        return (
+          <button key={t.label} aria-current={active ? 'page' : undefined} onClick={() => navigate(t.r)}>
+            <Icon name={t.icon} size={26} />
+            <span>{t.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -46,23 +53,31 @@ function Shell() {
     };
   }, []);
   useEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', app.editorTheme);
+    document.documentElement.setAttribute('data-theme', app.editorTheme);
   }, [app.editorTheme]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [route.name]);
 
   if (!ready) return <div className="boot" aria-busy="true" />;
   if (route.name === 'read') return <Reader key={route.id} id={route.id} />;
+  const showTabs = route.name !== 'edit' && route.name !== 'import' && route.name !== 'readingView';
   return (
-    <div className="shell">
-      {route.name !== 'edit' && <Nav route={route} />}
+    <div className={`shell${showTabs ? ' has-tabs' : ''}`}>
       {!online && <div className="offline-pill" role="status">Çevrimdışı — yerel veriler kullanılıyor</div>}
       <Suspense fallback={<main className="page" aria-busy="true" />}>
+        {route.name === 'home' && <Home />}
         {route.name === 'library' && <Library />}
+        {route.name === 'import' && <ImportPage />}
         {route.name === 'edit' && <Editor key={route.id} id={route.id} />}
         {route.name === 'settings' && <SettingsPage />}
+        {route.name === 'readingView' && <ReadingViewPage />}
+        {route.name === 'keys' && <KeysPage />}
+        {route.name === 'privacy' && <PrivacyPage />}
         {route.name === 'backup' && <BackupPage />}
       </Suspense>
-      {!app.onboardingDone && <Onboarding />}
+      {showTabs && <TabBar route={route} />}
+      {!app.onboardingDone && route.name === 'home' && <Onboarding />}
     </div>
   );
 }

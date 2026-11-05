@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Teleprompter',
   webDir: 'dist',
   android: {
-    backgroundColor: '#15171c',
+    backgroundColor: '#0c1730',
   },
 };
 

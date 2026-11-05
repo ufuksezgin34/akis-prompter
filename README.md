@@ -1,6 +1,6 @@
-# Akış Prompter
+# Teleprompter
 
-Türkçe öncelikli, tamamen cihazda çalışan teleprompter (web/PWA). Hesap, sunucu, reklam, abonelik veya ücretli API gerektirmez. Kamera/mikrofon izni istemeden metin gösterir.
+Türkçe öncelikli, tamamen cihazda çalışan, ücretsiz ve reklamsız teleprompter (web/PWA + Android APK). Hesap, sunucu, reklam, abonelik veya ücretli API gerektirmez. Kamera/mikrofon izni istemeden metin gösterir.
 
 > Durum: **Faz A (zorunlu çekirdek) tamamlandı.** Faz B’nin bir kısmı (cümle/bölüm gezinme, tekrar al, prova hızı ölçümü) da hazır. Ayrıntı: [FEATURES.md](FEATURES.md), [PROGRESS.md](PROGRESS.md).
 
@@ -57,6 +57,13 @@ Kaynaklar: [GitHub Pages limits](https://docs.github.com/en/pages/getting-starte
 - **Chrome/Edge (masaüstü/Android):** adres çubuğundaki “Yükle” simgesi veya Ayarlar sayfasındaki “Uygulamayı kur”.
 - Çevrimdışı çalışma, **bir kez internetle tam yükleme ve önbellek hazırlığından sonra** mümkündür (“Uygulama çevrimdışı kullanıma hazır” bildirimi). İlk ziyaret çevrimdışı çalışmaz.
 - Yeni sürüm yüklendiğinde okuma ekranı dışında “Yeni sürüm hazır” çubuğu çıkar; sayfa **asla kendiliğinden yenilenmez**.
+
+## Android APK
+
+`.github/workflows/android.yml`, `main` dalına her gönderimde testleri çalıştırır, Capacitor ile Android projesini eşitler, APK'yı imzalar ve GitHub Releases'e koyar. İndirme: https://github.com/ufuksezgin34/akis-prompter/releases/latest/download/Teleprompter.apk
+
+- İmza anahtarı depoda yalnızca şifreli (`android/keystore/release.jks.enc`); şifre `ANDROID_KEYSTORE_PASSWORD` gizli değeri olarak GitHub'da durur. Anahtar sabit kaldıkça yeni APK eskisinin üzerine kurulur ve veriler korunur.
+- Native pakette ekranı açık tutma eklentiyle, yedek/metin kaydetme sistem paylaşım sayfasıyla yapılır.
 
 ## Kısa kullanım
 

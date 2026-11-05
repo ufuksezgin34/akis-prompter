@@ -1,5 +1,7 @@
 import type { Align, CameraPosition, CountdownSeconds, ReaderSettings } from '../model/types';
-import { BASE_SETTINGS, SETTING_LIMITS } from '../profiles/defaults';
+import { BASE_SETTINGS, READER_THEMES, SETTING_LIMITS } from '../profiles/defaults';
+
+const THEME_LABEL = { navy: 'Lacivert', black: 'Siyah', paper: 'Kâğıt' } as const;
 
 type Num = keyof typeof SETTING_LIMITS;
 
@@ -28,6 +30,25 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 export function ReaderSettingsPanel({ s, set, compact }: { s: ReaderSettings; set: (p: Partial<ReaderSettings>) => void; compact?: boolean }) {
   return (
     <div className={`settings-panel${compact ? ' compact' : ''}`}>
+      <fieldset>
+        <legend>Tema</legend>
+        <div className="swatches" role="radiogroup" aria-label="Okuma teması">
+          {(Object.keys(READER_THEMES) as (keyof typeof READER_THEMES)[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={s.readerTheme === t}
+              aria-label={THEME_LABEL[t]}
+              className={`swatch sw-${t}`}
+              onClick={() => set({ readerTheme: t, ...READER_THEMES[t] })}
+            >
+              {s.readerTheme === t && <span aria-hidden="true">✓</span>}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
       <fieldset>
         <legend>Yazı</legend>
         <Slider k="fontSize" label="Yazı boyutu" s={s} set={set} unit=" px" />
@@ -92,7 +113,7 @@ export function ReaderSettingsPanel({ s, set, compact }: { s: ReaderSettings; se
 
       <fieldset>
         <legend>Akış</legend>
-        <Slider k="speed" label="Hız" s={s} set={set} unit=" px/s" />
+        <Slider k="wpm" label="Hız" s={s} set={set} step={5} unit=" kelime/dk" />
         <label className="field-inline">
           Başlangıç sayacı
           <select value={s.countdown} onChange={(e) => set({ countdown: Number(e.target.value) as CountdownSeconds })}>

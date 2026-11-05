@@ -136,9 +136,15 @@ export function prevSentenceOffset(layout: Layout, offset: number, mode: 'curren
   const idx = currentSentenceIndex(layout, offset);
   if (idx < 0) return 0;
   const cur = layout.sentences[idx]!;
-  const atStart = Math.abs(lineY(layout, offset) - cur.top) <= EPS;
-  const target = mode === 'previous' || atStart ? layout.sentences[idx - 1] ?? cur : cur;
-  return offsetForY(layout, target.top);
+  const y = lineY(layout, offset);
+  const atStart = Math.abs(y - cur.top) <= EPS;
+  if (mode === 'current' && !atStart) return offsetForY(layout, cur.top);
+  // Aynı satırda başlayan cümleler aynı konumu paylaşır; bir üst satırdaki cümleye geç.
+  for (let i = idx - 1; i >= 0; i--) {
+    const s = layout.sentences[i]!;
+    if (s.top < cur.top - EPS) return offsetForY(layout, s.top);
+  }
+  return offsetForY(layout, layout.sentences[0]!.top);
 }
 
 export function nextSectionOffset(layout: Layout, offset: number): number | null {

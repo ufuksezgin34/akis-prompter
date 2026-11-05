@@ -58,8 +58,19 @@ Etiketler: ✅ tamamlandı · 🧪 deneysel · ⏳ ertelendi · 🚫 platformda 
 | Çekim listesi (ekle, sırala, tamamlandı) | ⏳ | Veritabanı deposu (`setlists`) ve yedek kapsamı hazır, arayüz yok |
 | Take numarası/not/iyi take | ⏳ | Depo (`takes`) ve yedek kapsamı hazır, arayüz yok |
 | İkinci pencere / harici ekran temiz çıktı (BroadcastChannel) | ⏳ | |
-| DOCX düz metin içe aktarma | ⏳ | |
+| DOCX düz metin içe aktarma | ✅ | Biçim kaybı açıkça belirtilir; açılmış boyut sınırı var |
 | PDF metin katmanı içe aktarma | ⏳ | Taranmış PDF / OCR: 🚫 (ücretli OCR eklenmeyecek) |
+
+## Arayüz yenilemesi (kullanıcı tasarımı)
+
+| Özellik | Durum | Not |
+|---|---|---|
+| Lacivert/turuncu tasarım dili, gömülü Plus Jakarta Sans | ✅ | |
+| Ana sayfa, Metinler, Metni düzenle, Metin içe aktar, Ayarlar, Okuma görünümü | ✅ | |
+| Okuma ekranı: kelime/dk hız, ±10 sn, Aa/Ayna/Tekrar al/Kilit | ✅ | Hız, metnin ölçülmüş satır düzeninden px/s'ye çevrilir |
+| Çekimler, kamera kaydı, Çekime hazırlan, Çekimin hazır | ⏳ | Faz C; sekme kayıt çalışınca eklenecek |
+| Uzaktan kumanda / QR eşleştirme | ⏳ | Faz C |
+| Android APK (Capacitor) | ✅ | GitHub Actions'ta imzalı derleme |
 
 ## Faz C — Gelişmiş web
 

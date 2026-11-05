@@ -51,7 +51,7 @@ describe('metin deposu', () => {
 
   it('ilk açılışta başlangıç profilleri oluşur', async () => {
     const p = await listProfiles();
-    expect(p.map((x) => x.name)).toContain('Aynalı Prompter');
+    expect(p.map((x) => x.name)).toContain('Aynalı prompter');
   });
 });
 

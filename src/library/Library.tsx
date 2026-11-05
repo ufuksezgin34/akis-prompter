@@ -1,26 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Script } from '../model/types';
 import { createScript, deleteScriptForever, duplicateScript, listScripts, onExternalChange, patchScript, saveScript } from '../storage/repo';
-import { estimateSeconds, formatDuration, includesTr, parseMarkdown, parsePlainText, speechWordCount, DEFAULT_WPM, MAX_IMPORT_CHARS, newId } from '../model/text';
+import { DEFAULT_WPM, estimateSeconds, formatDuration, includesTr, speechWordCount } from '../model/text';
 import { navigate, useStore } from '../ui/store';
-import { formatDate, looksLikeText, readFileText, Toast, Dialog } from '../ui/common';
-import { longFormSample, reelsSample, stressSample } from './samples';
+import { Dialog, Toast } from '../ui/common';
 import { Icon } from '../ui/Icon';
+import { Brand } from '../ui/kit';
+import { longFormSample, reelsSample, stressSample } from './samples';
+import { createBlankScript } from '../home/Home';
 
 type Sort = 'updated' | 'created' | 'title' | 'duration';
-const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
+type View = { kind: 'all' } | { kind: 'fav' } | { kind: 'trash' } | { kind: 'tag'; tag: string } | { kind: 'drafts' };
+
+function relDay(ts: number): string {
+  const d = new Date(ts);
+  const t = new Date();
+  if (d.toDateString() === t.toDateString()) return 'Bugün';
+  return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+}
 
 export function Library() {
   const { activeProfile, dbError } = useStore();
   const [scripts, setScripts] = useState<Script[] | null>(null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<Sort>('updated');
-  const [view, setView] = useState<'all' | 'fav' | 'trash'>('all');
-  const [tag, setTag] = useState('');
-  const [folder, setFolder] = useState('');
+  const [view, setView] = useState<View>({ kind: 'all' });
   const [toast, setToast] = useState<string | null>(null);
+  const [menu, setMenu] = useState<Script | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Script | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -34,21 +42,23 @@ export function Library() {
     return onExternalChange(() => void load());
   }, [load]);
 
-  const wpm = activeProfile.settings.measuredWpm ?? DEFAULT_WPM;
-  const withStats = useMemo(
-    () => (scripts ?? []).map((s) => ({ s, words: speechWordCount(s.blocks) })),
-    [scripts],
+  const wpm = activeProfile.settings.wpm ?? DEFAULT_WPM;
+  const withStats = useMemo(() => (scripts ?? []).map((s) => ({ s, words: speechWordCount(s.blocks) })), [scripts]);
+  const allTags = useMemo(
+    () => [...new Set(withStats.filter((x) => !x.s.deletedAt).flatMap((x) => x.s.tags))].sort((a, b) => a.localeCompare(b, 'tr')),
+    [withStats],
   );
-  const allTags = useMemo(() => [...new Set(withStats.flatMap((x) => x.s.tags))].sort((a, b) => a.localeCompare(b, 'tr')), [withStats]);
-  const allFolders = useMemo(() => [...new Set(withStats.map((x) => x.s.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')), [withStats]);
+  const hasTrash = withStats.some((x) => x.s.deletedAt);
+  const hasFav = withStats.some((x) => x.s.favorite && !x.s.deletedAt);
+  const hasDrafts = withStats.some((x) => x.words === 0 && !x.s.deletedAt);
 
   const visible = useMemo(() => {
-    const list = withStats.filter(({ s }) => {
-      if (view === 'trash' ? !s.deletedAt : s.deletedAt) return false;
-      if (view === 'fav' && !s.favorite) return false;
-      if (tag && !s.tags.includes(tag)) return false;
-      if (folder && s.folder !== folder) return false;
-      if (q && !includesTr(s.title, q) && !s.tags.some((t) => includesTr(t, q)) && !s.blocks.some((b) => includesTr(b.text, q))) return false;
+    const list = withStats.filter(({ s, words }) => {
+      if (view.kind === 'trash' ? !s.deletedAt : s.deletedAt) return false;
+      if (view.kind === 'fav' && !s.favorite) return false;
+      if (view.kind === 'drafts' && words > 0) return false;
+      if (view.kind === 'tag' && !s.tags.includes(view.tag)) return false;
+      if (q && !includesTr(s.title, q) && !s.tags.some((t) => includesTr(t, q)) && !s.folder.includes(q) && !s.blocks.some((b) => includesTr(b.text, q))) return false;
       return true;
     });
     list.sort((a, b) => {
@@ -64,172 +74,151 @@ export function Library() {
       }
     });
     return list;
-  }, [withStats, view, tag, folder, q, sort]);
-
-  const create = async (title = 'Yeni metin', blocks = parsePlainText(''), tags: string[] = []) => {
-    const s = { ...createScript(title, blocks), tags };
-    const r = await saveScript(s);
-    if (r.ok) return r.script;
-    return null;
-  };
+  }, [withStats, view, q, sort]);
 
   const onNew = async () => {
-    const s = await create('Yeni metin', [{ id: newId(), type: 'speech', text: '' }]);
-    if (s) navigate({ name: 'edit', id: s.id });
+    const id = await createBlankScript();
+    if (id) navigate({ name: 'edit', id });
     else setToast('Metin oluşturulamadı. Depolama erişimini kontrol edin.');
   };
 
-  const onImport = async (files: FileList | null) => {
-    if (!files?.length) return;
-    let ok = 0;
-    const errors: string[] = [];
-    for (const f of Array.from(files)) {
-      try {
-        if (!(await looksLikeText(f))) throw new Error('metin dosyası değil (DOCX/PDF desteği sonraki aşamada)');
-        const text = await readFileText(f, MAX_IMPORT_BYTES);
-        if (text.length > MAX_IMPORT_CHARS) throw new Error('çok uzun');
-        const base = f.name.replace(/\.(txt|md|markdown)$/i, '');
-        const isMd = /\.(md|markdown)$/i.test(f.name);
-        const parsed = isMd ? parseMarkdown(text) : { title: null, blocks: parsePlainText(text) };
-        if (parsed.blocks.length === 0) throw new Error('boş dosya');
-        if (await create(parsed.title ?? base, parsed.blocks)) ok++;
-      } catch (e) {
-        errors.push(`${f.name}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    await load();
-    setToast(`${ok} dosya içe aktarıldı.${errors.length ? ` Atlananlar — ${errors.join('; ')}` : ''}`);
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
   const addSamples = async () => {
-    for (const x of [reelsSample(), longFormSample(), stressSample()]) await create(x.title, x.blocks, x.tags);
+    for (const x of [reelsSample(), longFormSample(), stressSample()]) await saveScript({ ...createScript(x.title, x.blocks), tags: x.tags });
     await load();
     setToast('3 örnek metin eklendi.');
   };
 
   if (scripts === null) return <main className="page" aria-busy="true" />;
+  const isActive = (v: View) => JSON.stringify(v) === JSON.stringify(view);
+  const chip = (v: View, label: string) => (
+    <button key={label} className="chip" aria-pressed={isActive(v)} onClick={() => setView(v)}>
+      {label}
+    </button>
+  );
+  const firstId = view.kind !== 'trash' ? visible[0]?.s.id : undefined;
 
   return (
     <main className="page library">
-      {dbError && (
-        <div className="banner danger" role="alert">
-          {dbError}
-        </div>
-      )}
-      <header className="lib-head">
-        <h1>Metinlerim</h1>
-        <div className="row">
-          <button className="btn primary" onClick={() => void onNew()}><Icon name="plus" size={20} /> Yeni metin</button>
-          <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" size={20} /> İçe aktar</button>
-          <input ref={fileRef} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple hidden onChange={(e) => void onImport(e.target.files)} />
-        </div>
-      </header>
+      {dbError && <div className="banner danger" role="alert">{dbError}</div>}
+      <Brand />
+      <div className="title-row">
+        <h1>Metinlerin</h1>
+        <button className="fab" onClick={() => void onNew()} aria-label="Yeni metin">
+          <Icon name="plus" size={30} />
+        </button>
+      </div>
 
-      <div className="filters">
-        <label className="search">
-          <Icon name="search" size={20} />
-          <input type="search" placeholder="Başlık, etiket veya içerikte ara" aria-label="Metinlerde ara" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <select aria-label="Sırala" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+      <label className="search">
+        <Icon name="search" size={22} />
+        <input ref={searchRef} type="search" placeholder="Metinlerde ara" aria-label="Metinlerde ara" value={q} onChange={(e) => setQ(e.target.value)} />
+      </label>
+
+      <div className="chips" role="group" aria-label="Filtre">
+        {chip({ kind: 'all' }, 'Tümü')}
+        {allTags.map((t) => chip({ kind: 'tag', tag: t }, t))}
+        {hasFav && chip({ kind: 'fav' }, 'Favoriler')}
+        {hasDrafts && chip({ kind: 'drafts' }, 'Taslaklar')}
+        {hasTrash && chip({ kind: 'trash' }, 'Çöp kutusu')}
+        <select className="chip-select" aria-label="Sırala" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           <option value="updated">Son düzenlenen</option>
           <option value="created">Oluşturma tarihi</option>
           <option value="title">Ada göre</option>
           <option value="duration">Süreye göre</option>
         </select>
-        {allTags.length > 0 && (
-          <select aria-label="Etiket filtresi" value={tag} onChange={(e) => setTag(e.target.value)}>
-            <option value="">Tüm etiketler</option>
-            {allTags.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        )}
-        {allFolders.length > 0 && (
-          <select aria-label="Proje filtresi" value={folder} onChange={(e) => setFolder(e.target.value)}>
-            <option value="">Tüm projeler</option>
-            {allFolders.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        )}
-        <div className="seg" role="group" aria-label="Görünüm">
-          <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Tümü</button>
-          <button aria-pressed={view === 'fav'} onClick={() => setView('fav')}>Favoriler</button>
-          <button aria-pressed={view === 'trash'} onClick={() => setView('trash')}>Çöp kutusu</button>
-        </div>
       </div>
 
       {visible.length === 0 && (
         <div className="empty">
           {scripts.length === 0 ? (
             <>
-              <div className="empty-art" aria-hidden="true">
-                <span /><span /><span className="hot" /><span />
-              </div>
+              <span className="empty-icon"><Icon name="file" size={40} /></span>
               <h2>İlk metnini ekle</h2>
-              <p>Yaz, yapıştır ya da TXT/Markdown dosyası içe aktar. Denemek için hazır örneklerle de başlayabilirsin.</p>
+              <p>Yaz, yapıştır ya da dosyadan içe aktar. Denemek için hazır örneklerle de başlayabilirsin.</p>
               <div className="row center">
                 <button className="btn primary" onClick={() => void onNew()}><Icon name="plus" size={20} /> Yeni metin</button>
-                <button className="btn" onClick={() => void addSamples()}>Örnek metinleri ekle</button>
+                <button className="btn" onClick={() => navigate({ name: 'import' })}>İçe aktar</button>
+                <button className="btn ghost" onClick={() => void addSamples()}>Örnek metinleri ekle</button>
               </div>
             </>
           ) : (
-            <p>{view === 'trash' ? 'Çöp kutusu boş.' : view === 'fav' ? 'Henüz favori metin yok. Kartlardaki yıldızla ekleyebilirsin.' : 'Aramayla eşleşen metin yok.'}</p>
+            <p>{view.kind === 'trash' ? 'Çöp kutusu boş.' : 'Aramayla eşleşen metin yok.'}</p>
           )}
         </div>
       )}
 
-      <ul className="cards">
-        {visible.map(({ s, words }) => {
-          const secs = estimateSeconds(words, wpm);
-          return (
-            <li key={s.id} className={`card${s.deletedAt ? ' is-trashed' : ''}`}>
-              <div className="slate" aria-label={`Tahmini süre ${formatDuration(secs)}`}>
-                <span className="slate-time">{formatDuration(secs)}</span>
-                <span className="slate-words">{words.toLocaleString('tr')} kelime</span>
-              </div>
-              <div className="card-main">
-                <h2>
-                  <button className="link" onClick={() => navigate({ name: 'edit', id: s.id })} disabled={!!s.deletedAt}>
-                    {s.title}
-                  </button>
-                </h2>
-                <p className="card-meta">
-                  <span>{formatDate(s.updatedAt)}</span>
-                  {s.folder && <span className="meta-folder">{s.folder}</span>}
-                  {s.lastPosition && !s.deletedAt && <span className="meta-resume">Kaldığı yer kayıtlı</span>}
-                </p>
-                {s.tags.length > 0 && (
-                  <p className="tags">
-                    {s.tags.map((t) => <span key={t} className="tag">{t}</span>)}
-                  </p>
-                )}
-              </div>
-              <div className="card-actions">
-                {s.deletedAt ? (
-                  <>
-                    <button className="btn" onClick={() => void patchScript(s.id, { deletedAt: null }).then(load)}>Geri yükle</button>
-                    <button className="btn danger" onClick={() => setConfirmDelete(s)}>Kalıcı sil</button>
-                  </>
-                ) : (
-                  <>
-                    <button className={`icon-btn fav${s.favorite ? ' on' : ''}`} aria-label={s.favorite ? 'Favoriden çıkar' : 'Favorilere ekle'} aria-pressed={s.favorite} onClick={() => void patchScript(s.id, { favorite: !s.favorite }).then(load)}>
-                      <Icon name="star" filled={s.favorite} />
-                    </button>
-                    <button className="icon-btn" aria-label="Çoğalt" title="Çoğalt" onClick={() => void saveScript(duplicateScript(s)).then(load)}><Icon name="copy" /></button>
-                    <button
-                      className="icon-btn"
-                      aria-label="Çöp kutusuna taşı"
-                      title="Çöp kutusuna taşı"
-                      onClick={() => void patchScript(s.id, { deletedAt: Date.now() }).then(() => { void load(); setToast(`“${s.title}” çöp kutusuna taşındı.`); })}
-                    >
-                      <Icon name="trash" />
-                    </button>
-                    <button className="btn primary read-btn" disabled={words === 0} onClick={() => navigate({ name: 'read', id: s.id })}><Icon name="play" size={18} /> Oku</button>
-                  </>
-                )}
-              </div>
-            </li>
-          );
-        })}
+      <ul className="doc-list">
+        {visible.map(({ s, words }) => (
+          <li key={s.id} className={`doc${s.id === firstId ? ' is-recent' : ''}${s.deletedAt ? ' is-trashed' : ''}`}>
+            <button className="doc-main" onClick={() => (s.deletedAt ? setMenu(s) : navigate({ name: 'edit', id: s.id }))}>
+              <span className="doc-icon"><Icon name="file" size={30} /></span>
+              <span className="doc-text">
+                <strong>
+                  {s.favorite && <Icon name="star" size={16} filled />} {s.title}
+                </strong>
+                <span className="doc-meta">
+                  {words > 0 ? (
+                    <>
+                      <span>{words.toLocaleString('tr')} kelime</span>
+                      <span>{formatDuration(estimateSeconds(words, wpm))}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Taslak</span>
+                      <span>{relDay(s.updatedAt)}</span>
+                    </>
+                  )}
+                </span>
+              </span>
+            </button>
+            <button className="icon-btn doc-more" aria-label={`${s.title} için seçenekler`} onClick={() => setMenu(s)}>
+              <Icon name="more" size={26} />
+            </button>
+          </li>
+        ))}
       </ul>
+
+      <Dialog open={!!menu} title={menu?.title ?? ''} onClose={() => setMenu(null)}>
+        {menu && (
+          <div className="menu-sheet">
+            {menu.deletedAt ? (
+              <>
+                <button className="sheet-row" onClick={async () => { await patchScript(menu.id, { deletedAt: null }); setMenu(null); void load(); }}>
+                  <Icon name="undo" /> Geri yükle
+                </button>
+                <button className="sheet-row danger" onClick={() => { setConfirmDelete(menu); setMenu(null); }}>
+                  <Icon name="trash" /> Kalıcı sil
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="sheet-row" disabled={speechWordCount(menu.blocks) === 0} onClick={() => navigate({ name: 'read', id: menu.id })}>
+                  <Icon name="play" /> Prompteri aç
+                </button>
+                <button className="sheet-row" onClick={() => navigate({ name: 'edit', id: menu.id })}>
+                  <Icon name="edit" /> Düzenle
+                </button>
+                <button className="sheet-row" onClick={async () => { await patchScript(menu.id, { favorite: !menu.favorite }); setMenu(null); void load(); }}>
+                  <Icon name="star" filled={menu.favorite} /> {menu.favorite ? 'Favoriden çıkar' : 'Favorilere ekle'}
+                </button>
+                <button className="sheet-row" onClick={async () => { await saveScript(duplicateScript(menu)); setMenu(null); void load(); setToast('Kopya oluşturuldu.'); }}>
+                  <Icon name="copy" /> Çoğalt
+                </button>
+                <button
+                  className="sheet-row danger"
+                  onClick={async () => {
+                    await patchScript(menu.id, { deletedAt: Date.now() });
+                    setToast(`“${menu.title}” çöp kutusuna taşındı.`);
+                    setMenu(null);
+                    void load();
+                  }}
+                >
+                  <Icon name="trash" /> Çöp kutusuna taşı
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </Dialog>
 
       <Dialog
         open={!!confirmDelete}
@@ -251,7 +240,7 @@ export function Library() {
           </>
         }
       >
-        <p>“{confirmDelete?.title}” ve yerel sürümleri bu cihazdan silinecek. Bu işlem geri alınamaz. Gerekirse önce Yedekleme’den dışa aktarın.</p>
+        <p>“{confirmDelete?.title}” ve yerel sürümleri bu cihazdan silinecek. Bu işlem geri alınamaz.</p>
       </Dialog>
       <Toast message={toast} onClose={() => setToast(null)} />
     </main>
